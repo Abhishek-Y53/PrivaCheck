@@ -1,0 +1,71 @@
+privacheck/
+│
+├── frontend/
+│   ├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+│
+├── backend/
+│   │
+│   ├── api/
+│   │   ├── routes/
+│   │   └── dependencies/
+│   │
+│   ├── core/
+│   │   ├── config.py
+│   │   ├── security.py
+│   │   └── logging.py
+│   │
+│   ├── domain/
+│   │   ├── scans/
+│   │   ├── checks/
+│   │   ├── pages/
+│   │   └── reports/
+│   │
+│   ├── crawler/
+│   │   ├── browser.py
+│   │   ├── network.py
+│   │   ├── cookies.py
+│   │   ├── storage.py
+│   │   ├── dom.py
+│   │   ├── links.py
+│   │   └── two_pass.py
+│   │
+│   ├── compliance/
+│   │   ├── base.py
+│   │   ├── group_a/
+│   │   ├── group_b/
+│   │   ├── group_c/
+│   │   └── registry.py
+│   │
+│   ├── nlp/
+│   │   ├── extractor.py
+│   │   ├── matcher.py
+│   │   ├── readability.py
+│   │   └── embeddings.py
+│   │
+│   ├── workers/
+│   │   ├── crawler_tasks.py
+│   │   ├── analysis_tasks.py
+│   │   └── report_tasks.py
+│   │
+│   ├── models/
+│   ├── schemas/
+│   └── database/
+│
+├── tests/
+│   ├── crawler/
+│   ├── compliance/
+│   ├── nlp/
+│   └── api/
+│
+├── docker/
+│
+├── docker-compose.yml
+│
+├── migrations/
+│
+├── docs/
+│
+└── README.md
