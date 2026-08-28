@@ -39,16 +39,16 @@ These checks utilize the headless browser's ability to record network requests a
 
 | # | Compliance Check | Implementation Strategy (How) |
 |---|---|---|
-| 20 | No non-essential cookies set before consent | Record `Set-Cookie` headers and `document.cookie` before any consent click is simulated. |
-| 21 | *No HTML5 Web Storage set before consent* | Inspect `window.localStorage`, `sessionStorage`, and `IndexedDB` before consent. |
-| 22 | No tracking/analytics requests fired before consent | Record outbound requests (GA, Meta Pixel, ad networks) before consent interaction. |
-| 23 | Third-party trackers cross-checked against policy | Domain-match outbound requests against a known tracker list, then keyword-match policy text for vendor names. |
-| 24 | Site served over HTTPS with valid certificate | TLS handshake verification. |
-| 25 | No mixed content on pages with forms | Scan for `http://` resources loaded on an `https://` page. |
-| 26 | Forms submitting personal data POST over HTTPS | Inspect form `action` attribute and the actual network request scheme. |
-| 27 | Security headers present | Inspect response headers for HSTS, CSP, X-Content-Type-Options, etc. |
-| 28 | International data transfer signals detected | IP/domain geolocation lookup on outbound request destinations to detect non-EU data transfers. |
-| 29 | *Respects Global Privacy Control (GPC)* | Send `Sec-GPC: 1` header and monitor if site drops non-essential trackers automatically. |
+| 20 | No non-essential cookies set before consent(cookies.py) | Record `Set-Cookie` headers and `document.cookie` before any consent click is simulated. |
+| 21 | *No HTML5 Web Storage set before consent*(storage.py) | Inspect `window.localStorage`, `sessionStorage`, and `IndexedDB` before consent. |
+| 22 | No tracking/analytics requests fired before consent(network.py) | Record outbound requests (GA, Meta Pixel, ad networks) before consent interaction. |
+| 23 | Third-party trackers cross-checked against policy(text.py) | Domain-match outbound requests against a known tracker list, then keyword-match policy text for vendor names. |
+| 24 | Site served over HTTPS with valid certificate(network.py/security.py) | TLS handshake verification. |
+| 25 | No mixed content on pages with forms(network.py) | Scan for `http://` resources loaded on an `https://` page. |
+| 26 | Forms submitting personal data POST over HTTPS (dom.py) | Inspect form `action` attribute and the actual network request scheme. |
+| 27 | Security headers present(network.py) | Inspect response headers for HSTS, CSP, X-Content-Type-Options, etc. |
+| 28 | International data transfer signals detected (network.py) | IP/domain geolocation lookup on outbound request destinations to detect non-EU data transfers. |
+| 29 | *Respects Global Privacy Control (GPC)* (browser.py) | Send `Sec-GPC: 1` header and monitor if site drops non-essential trackers automatically. |
 
 ---
 

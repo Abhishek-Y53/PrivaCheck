@@ -31,7 +31,7 @@ class CheckResult(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence score from 0.0 to 1.0")
     explanation: str
     recommendation: Optional[str] = None
-    evidence: List[Observation] = [] # The crawler observations that triggered this result
+    evidence: List[Observation] = Field(default_factory=list) # The crawler observations that triggered this result
 
 
 class ScanReport(BaseModel):
