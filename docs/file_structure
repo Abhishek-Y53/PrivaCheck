@@ -19,8 +19,8 @@ privacheck/
 │   │
 │   ├── domain/
 │   │   ├── scans/
-│   │   ├── checks/
-│   │   ├── pages/
+│   │   ├── observations/
+│   │   ├── rules/
 │   │   └── reports/
 │   │
 │   ├── crawler/
@@ -32,12 +32,23 @@ privacheck/
 │   │   ├── links.py
 │   │   └── two_pass.py
 │   │
-│   ├── compliance/
-│   │   ├── base.py
-│   │   ├── group_a/
-│   │   ├── group_b/
-│   │   ├── group_c/
-│   │   └── registry.py
+│   ├── rule_engine/
+│   │   ├── engine.py
+│   │   ├── loader.py
+│   │   ├── evaluator.py
+│   │   ├── operators.py
+│   │   ├── validators.py
+│   │   └── evaluators/
+│   │       ├── declarative.py
+│   │       ├── state_diff.py
+│   │       ├── visual.py
+│   │       └── nlp.py
+│   │
+│   ├── analysis/
+│   │   ├── tracker.py
+│   │   ├── domain.py
+│   │   ├── security.py
+│   │   └── policy.py
 │   │
 │   ├── nlp/
 │   │   ├── extractor.py
@@ -54,9 +65,20 @@ privacheck/
 │   ├── schemas/
 │   └── database/
 │
+├── rules/
+│   ├── gdpr/
+│   │   └── rules.yaml
+│   │
+│   ├── security/
+│   │   └── rules.yaml
+│   │
+│   └── accessibility/
+│       └── rules.yaml
+│
 ├── tests/
 │   ├── crawler/
-│   ├── compliance/
+│   ├── rule_engine/
+│   ├── analysis/
 │   ├── nlp/
 │   └── api/
 │
@@ -68,4 +90,8 @@ privacheck/
 │
 ├── docs/
 │
-└── README.md
+├── .env
+├── .env.example
+├── requirements.txt
+├── README.md
+└── .gitignore

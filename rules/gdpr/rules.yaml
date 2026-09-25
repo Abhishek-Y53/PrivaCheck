@@ -1,0 +1,48 @@
+rules:
+  - id: GDPR-003
+
+    name: Reject All consent option
+
+    description: >
+      Checks whether a visible consent mechanism provides
+      a Reject All or equivalent decline option.
+
+    category: CONSENT
+
+    applicability:
+      observation: dom_button
+      conditions:
+        any:
+          - field: text
+            operator: matches
+            value: "(?i)accept all cookies|accept cookies|allow all cookies|reject all cookies|decline all cookies|deny all cookies|cookie settings|cookie preferences|manage cookies|privacy choices|consent preferences|only necessary cookies"
+
+          - field: aria_label
+            operator: matches
+            value: "(?i)accept all cookies|accept cookies|allow all cookies|reject all cookies|decline all cookies|deny all cookies|cookie settings|cookie preferences|manage cookies|privacy choices|consent preferences|only necessary cookies"
+
+    source:
+      observation: dom_button
+      match: any
+
+    evaluator: declarative
+
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: "(?i)reject all|decline all|deny all|refuse all|only necessary"
+
+        - field: aria_label
+          operator: matches
+          value: "(?i)reject all|decline all|deny all|refuse all|only necessary"
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: HIGH
+
+    recommendation: >
+      Provide a clearly visible Reject All or equivalent
+      option alongside consent acceptance controls.

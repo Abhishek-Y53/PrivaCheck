@@ -14,6 +14,10 @@ class ComplianceStatus(str, Enum):
     FAIL = "FAIL"
     WARNING = "WARNING"
     MANUAL_REVIEW = "MANUAL_REVIEW"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+
 
 # 1. This represents raw data found by the crawler
 class Observation(BaseModel):
@@ -21,6 +25,20 @@ class Observation(BaseModel):
     source_url: str
     timestamp: float
     data: Dict[str, Any] = Field(description="The actual data, like cookie values or HTML snippets")
+
+class CrawlerStatus(str, Enum):
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class CrawlerResult(BaseModel):
+    target_url: str
+    final_url: str
+    observations: List[Observation]
+    started_at: float
+    completed_at: float
+    status: CrawlerStatus
+    error: Optional[str] = None
 
 # 2. This represents the final output of a single GDPR check
 class CheckResult(BaseModel):

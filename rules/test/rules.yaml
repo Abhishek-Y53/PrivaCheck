@@ -1,0 +1,55 @@
+rules:
+
+  - id: TEST-001
+    name: All network requests use HTTPS
+    description: Every observed network request should use HTTPS.
+
+    category: SECURITY
+
+    source:
+      observation: network_request
+      match: all
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: protocol
+          operator: equals
+          value: https
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: HIGH
+
+    recommendation: Serve all website resources over HTTPS.
+
+
+
+  - id: TEST-002
+    name: BBC page contains BBC
+    description: The visible page text should contain BBC.
+
+    category: CONTENT
+
+    source:
+      observation: dom_visible_text
+      match: any
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: text
+          operator: contains
+          value: BBC
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: LOW
+
+    recommendation: Ensure the page contains the expected content.
