@@ -1,3 +1,4 @@
+
 import time
 from typing import List
 
@@ -8,10 +9,10 @@ from backend.schemas.core import Observation
 
 class LinkCollector:
     """
-    Collects link data required by the crawler.
+    Collects link information and surrounding page context.
 
-    Responsible only for discovering links and their metadata.
-    Does not perform navigation or compliance analysis.
+    This collector records evidence only. It does not determine
+    compliance or decide which links to visit.
     """
 
     def __init__(self, page: Page, source_url: str):
@@ -19,25 +20,79 @@ class LinkCollector:
         self.source_url = source_url
 
     async def collect_links(self) -> List[Observation]:
-        """
-        Collect all links with their destination and identifying text.
-        """
+        observations: List[Observation] = []
 
         links = await self.page.evaluate(
             """
             () => {
+                function getRegion(link) {
+                    if (
+                        link.closest(
+                            'footer, [role="contentinfo"], ' +
+                            '#footer, .footer, ' +
+                            '[id*="footer" i], [class*="footer" i]'
+                        )
+                    ) {
+                        return "footer";
+                    }
+
+                    if (
+                        link.closest(
+                            'header, [role="banner"], ' +
+                            '#header, .header, ' +
+                            '[id*="header" i], [class*="header" i]'
+                        )
+                    ) {
+                        return "header";
+                    }
+
+                    if (
+                        link.closest(
+                            'main, [role="main"], ' +
+                            '#main, .main-content, ' +
+                            '[id*="main-content" i]'
+                        )
+                    ) {
+                        return "main";
+                    }
+
+                    return "other";
+                }
+
+                function getContextText(link) {
+                    // Prefer a nearby text container rather than the
+                    // entire section or entire page.
+                    const container = link.closest(
+                        'p, li, dd, td, section, article'
+                    ) || link.parentElement;
+
+                    if (!container) {
+                        return "";
+                    }
+
+                    return (container.innerText || "")
+                        .replace(/\\s+/g, " ")
+                        .trim()
+                        .slice(0, 500);
+                }
+
                 return Array.from(
-                    document.querySelectorAll("a[href]")
-                ).map(link => ({
-                    href: link.href,
-                    text: link.innerText.trim(),
-                    aria_label: link.getAttribute("aria-label")
-                }));
+                    document.querySelectorAll('a[href]')
+                ).map(a => {
+                    const region = getRegion(a);
+
+                    return {
+                        href: a.href,
+                        text: a.innerText.trim(),
+                        target: a.target,
+                        region: region,
+                        is_footer_link: region === "footer",
+                        context_text: getContextText(a)
+                    };
+                });
             }
             """
         )
-
-        observations: List[Observation] = []
 
         for link in links:
             observations.append(
@@ -45,7 +100,7 @@ class LinkCollector:
                     category="link",
                     source_url=self.source_url,
                     timestamp=time.time(),
-                    data=link
+                    data=link,
                 )
             )
 

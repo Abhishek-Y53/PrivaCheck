@@ -46,3 +46,229 @@ rules:
     recommendation: >
       Provide a clearly visible Reject All or equivalent
       option alongside consent acceptance controls.
+
+  - id: GDPR-024
+    name: HTTPS with valid TLS certificate
+    description: >
+      Checks whether the final page URL is served over HTTPS and the
+      TLS certificate passes standard certificate and hostname verification.
+
+    category: SECURITY
+
+    source:
+      observation: tls_certificate
+      match: all
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: protocol
+          operator: equals
+          value: https
+
+        - field: verified
+          operator: equals
+          value: true
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: HIGH
+
+    recommendation: >
+      Serve the website over HTTPS and ensure that its TLS certificate
+      is valid, trusted, unexpired, and matches the requested hostname.
+
+  - id: GDPR-025
+    name: No mixed content on pages with forms
+    description: >
+      Checks that an HTTPS page containing forms does not load
+      non-navigation resources over HTTP.
+
+    category: SECURITY
+
+    applicability:
+      observation: page_context
+      conditions:
+        all:
+          - field: is_https
+            operator: equals
+            value: true
+
+          - field: has_forms
+            operator: equals
+            value: true
+
+    source:
+      observation: network_request
+      match: none
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: protocol
+          operator: equals
+          value: http
+
+        - field: is_navigation_request
+          operator: equals
+          value: false
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: HIGH
+
+    recommendation: >
+      Ensure that all resources loaded by HTTPS pages, especially pages
+      containing forms, are served over HTTPS to prevent mixed content.
+
+  - id: GDPR-006
+
+    name: Privacy Policy link exists
+
+    description: >
+      Checks whether the page provides a link that appears to lead
+      to a privacy policy or privacy notice.
+
+    category: PRIVACY
+
+    source:
+      observation: link
+      match: any
+
+    evaluator: declarative
+
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: "(?i)privacy policy|privacy notice|privacy statement|data protection"
+
+        - field: href
+          operator: matches
+          value: "(?i)privacy|privacy-policy|privacy_notice|privacy-notice|data-protection"
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: MEDIUM
+
+    recommendation: >
+      Provide a clearly accessible link to the website's privacy policy
+      or privacy notice.
+
+  - id: GDPR-008
+
+    name: Data access mechanism exists
+
+    description: >
+      Checks whether the page provides a link or mechanism that appears
+      to allow users to request or access their personal data.
+
+    category: PRIVACY
+
+    source:
+      observation: link
+      match: any
+
+    evaluator: declarative
+
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: "(?i)access my data|access your data|request my data|request your data|data access|personal data request|subject access request|DSAR|data subject request"
+
+        - field: href
+          operator: matches
+          value: "(?i)data-access|access-data|request-data|personal-data|data-request|dsar|subject-access"
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: MEDIUM
+
+    recommendation: >
+      Provide users with a clear mechanism to request access to
+      their personal data.
+
+  - id: GDPR-009
+
+    name: Data export mechanism exists
+
+    description: >
+      Checks whether the page provides a link or mechanism that appears
+      to allow users to export or download their personal data.
+
+    category: PRIVACY
+
+    source:
+      observation: link
+      match: any
+
+    evaluator: declarative
+
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: "(?i)export my data|export your data|data export|download my data|download your data|download data|export data|personal data export"
+
+        - field: href
+          operator: matches
+          value: "(?i)data-export|export-data|download-data|data-download|personal-data-export"
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: MEDIUM
+
+    recommendation: >
+      Provide users with a clear mechanism to export or download
+      their personal data.
+
+
+  - id: GDPR-010
+
+    name: Erasure and rectification mechanism exists
+
+    description: >
+      Checks whether the page provides a link or mechanism that appears
+      to allow users to request deletion, erasure, correction, or
+      rectification of their personal data.
+
+    category: PRIVACY
+
+    source:
+      observation: link
+      match: any
+
+    evaluator: declarative
+
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: "(?i)delete my data|delete your data|erase my data|erase your data|data deletion|delete account|remove my data|correct my data|update my data|rectify my data|rectification|correct personal data"
+
+        - field: href
+          operator: matches
+          value: "(?i)data-deletion|delete-data|delete-account|erase-data|remove-data|data-correction|correct-data|rectification"
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: HIGH
+
+    recommendation: >
+      Provide users with a clear mechanism to request erasure or
+      rectification of their personal data.

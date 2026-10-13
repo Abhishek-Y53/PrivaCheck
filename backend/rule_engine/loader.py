@@ -21,8 +21,8 @@ SUPPORTED_OBSERVATIONS = {
     "local_storage",
     "session_storage",
     "indexed_db",
+    "tls_certificate",
 }
-
 SUPPORTED_EVALUATORS = {
     "declarative",
     "state_diff",
@@ -33,6 +33,7 @@ SUPPORTED_EVALUATORS = {
 SUPPORTED_MATCH_TYPES = {
     "all",
     "any",
+    "none",
 }
 
 

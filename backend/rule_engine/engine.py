@@ -30,12 +30,11 @@ class RuleEngine:
         self.state_diff_evaluator = StateDiffEvaluator()
         self.operator_evaluator = OperatorEvaluator()
 
-
     def evaluate_rule(
         self,
         rule: Rule,
         observations: List[Observation] | TwoPassResult,
-        ) -> CheckResult:
+    ) -> CheckResult:
 
         if rule.applicability is not None:
             if not self._is_applicable(
@@ -50,25 +49,31 @@ class RuleEngine:
                     confidence=1.0,
                     explanation=(
                         f"Rule '{rule.name}' is not applicable because "
-                        "no matching consent mechanism was detected."
+                        "its applicability conditions were not satisfied."
                     ),
                     recommendation=None,
                     evidence=[],
                 )
 
-        evaluation = self._evaluate(rule, observations)
-    
+        evaluation = self._evaluate(
+            rule,
+            observations,
+        )
+
         status = (
             rule.result.pass_
             if evaluation.passed
             else rule.result.fail
         )
 
-        evidence = (
-            evaluation.failed_observations
-            if not evaluation.passed
-            else evaluation.matched_observations
-        )
+        if evaluation.passed:
+            evidence = evaluation.matched_observations
+        elif rule.source.match == "all":
+            evidence = evaluation.failed_observations
+        elif rule.source.match == "none":
+            evidence = evaluation.matched_observations
+        else:
+            evidence = []
 
         explanation = self._build_explanation(
             rule,
@@ -108,7 +113,6 @@ class RuleEngine:
             for rule in rules
         ]
 
-
     def _is_applicable(
         self,
         applicability: RuleApplicability,
@@ -138,12 +142,12 @@ class RuleEngine:
 
         return False
 
-
     def _matches_conditions(
         self,
         conditions,
-    observation: Observation,
+        observation: Observation,
     ) -> bool:
+
         if conditions.all is not None:
             return all(
                 self._evaluate_condition(
@@ -155,12 +159,12 @@ class RuleEngine:
 
         if conditions.any is not None:
             return any(
-            self._evaluate_condition(
-                condition,
-                observation,
+                self._evaluate_condition(
+                    condition,
+                    observation,
+                )
+                for condition in conditions.any
             )
-            for condition in conditions.any
-        )
 
         if conditions.not_ is not None:
             return not any(
@@ -168,17 +172,17 @@ class RuleEngine:
                     condition,
                     observation,
                 )
-            for condition in conditions.not_
-        )
+                for condition in conditions.not_
+            )
 
         return False
-
 
     def _evaluate_condition(
         self,
         condition: RuleCondition,
         observation: Observation,
     ) -> bool:
+
         actual_value = self._get_field(
             observation.data,
             condition.field,
@@ -189,7 +193,6 @@ class RuleEngine:
             actual_value,
             condition.value,
         )
-
 
     @staticmethod
     def _get_field(
@@ -205,8 +208,6 @@ class RuleEngine:
                 return None
 
         return current
-
-
 
     def _evaluate(
         self,
@@ -279,4 +280,7 @@ class RuleEngine:
         if total == 0:
             return 0.0
 
-        return len(evaluation.matched_observations) / total
+        return (
+            len(evaluation.matched_observations)
+            / total
+        )

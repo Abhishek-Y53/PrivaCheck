@@ -6,7 +6,7 @@ from backend.schemas.core import ComplianceStatus, SeverityLevel
 
 class RuleSource(BaseModel):
     observation: str
-    match: str = "all"
+    match: Literal["all", "any", "none"] = "all"
 
 
 class RuleCondition(BaseModel):

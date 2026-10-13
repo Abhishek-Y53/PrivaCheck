@@ -152,6 +152,9 @@ class DeclarativeEvaluator:
         if match_type == "any":
             return len(matched_observations) > 0
 
+        if match_type == "none":
+            return len(matched_observations) == 0
+
         raise ValueError(
             f"Unsupported match type: {match_type}"
         )
