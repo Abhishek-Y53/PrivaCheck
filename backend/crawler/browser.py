@@ -1,67 +1,71 @@
+import asyncio
 from typing import Tuple
-
-from playwright.async_api import (
-    async_playwright,
-    Browser,
-    BrowserContext,
-    Page,
-    Playwright,
-)
-
+from playwright.async_api import async_playwright, Browser, BrowserContext, Page, Playwright
 
 class BrowserManager:
     """
-    Responsible exclusively for browser lifecycle.
-
-    It does not collect observations or perform compliance analysis.
+    Responsible exclusively for the browser lifecycle.
+    Does NOT collect data or run scans directly.
     """
-
     def __init__(self, headless: bool = True):
         self.headless = headless
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
 
     async def start(self) -> None:
-        """Start Playwright and launch Chromium."""
-
-        self._playwright = (
-            await async_playwright().start()
-        )
-
-        self._browser = (
-            await self._playwright.chromium.launch(
-                headless=self.headless
-            )
-        )
-
-    async def create_context_and_page(
-        self,
-    ) -> Tuple[BrowserContext, Page]:
         """
-        Create a fresh isolated browser context and page.
+        Starts the playwright engine and launches the browser.
         """
+        print("Starting browser...")
+        self._playwright = await async_playwright().start()
+        self._browser = await self._playwright.chromium.launch(headless=self.headless)
 
-        if self._browser is None:
-            raise RuntimeError(
-                "Browser is not started. "
-                "Call start() first."
-            )
-
-        context = (
-            await self._browser.new_context()
-        )
-
+    async def create_context_and_page(self) -> Tuple[BrowserContext, Page]:
+        """
+        Creates a new isolated browser context and page.
+        Returns both so that collectors have access to context-level data (like cookies).
+        """
+        if not self._browser:
+            raise RuntimeError("Browser is not started. Call start() first.")
+        
+        context = await self._browser.new_context(service_workers="block")
         page = await context.new_page()
-
         return context, page
 
     async def stop(self) -> None:
-        """Safely close browser and Playwright."""
-
-        if self._browser is not None:
+        """
+        Safely closes the browser and playwright engine.
+        """
+        print("Stopping browser...")
+        if self._browser:
             await self._browser.close()
-            self._browser = None
-
-        if self._playwright is not None:
+        if self._playwright:
             await self._playwright.stop()
-            self._playwright = None
+
+
+# --- Test Script ---
+if __name__ == "__main__":
+    from backend.crawler.two_pass import TwoPassRunner
+
+    async def test():
+        manager = BrowserManager(headless=True)
+        await manager.start()
+        
+        context, page = await manager.create_context_and_page()
+        url = "https://www.mstcecommerce.com/auctionhome/index_new.jsp"
+        
+        print(f"\nRunning Two-Pass Scan on {url}...")
+        runner = TwoPassRunner(page, context, url)
+        result = await runner.run()
+
+        print(f"\nTwo-Pass Status: {result.status}")
+        print(f"Accept Observations: {len(result.accept_observations)}")
+        print(f"Reject Observations: {len(result.reject_observations)}")
+        if result.error:
+            print(f"Error: {result.error}")
+        
+        await page.close()
+        await context.close()
+        await manager.stop()
+
+    asyncio.run(test())

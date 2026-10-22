@@ -183,11 +183,15 @@ rules:
       any:
         - field: text
           operator: matches
-          value: "(?i)access my data|access your data|request my data|request your data|data access|personal data request|subject access request|DSAR|data subject request"
+          value: '(?i)access.{0,50}(my|your|personal)? ?data|request.{0,50}(my|your|personal)? ?data|data access|personal data request|subject access request|DSAR|data subject request|via your account'
 
         - field: href
           operator: matches
-          value: "(?i)data-access|access-data|request-data|personal-data|data-request|dsar|subject-access"
+          value: '(?i)yourdata|data-access|access-data|request-data|personal-data|data-request|dsar|subject-access'
+
+        - field: context_text
+          operator: matches
+          value: '(?i)request.{0,100}(information|personal data|your account|data about you)|access.{0,100}(information|personal data|your account|data about you)'
 
     result:
       pass: PASS
@@ -252,16 +256,19 @@ rules:
       match: any
 
     evaluator: declarative
-
     conditions:
       any:
         - field: text
           operator: matches
-          value: "(?i)delete my data|delete your data|erase my data|erase your data|data deletion|delete account|remove my data|correct my data|update my data|rectify my data|rectification|correct personal data"
+          value: '(?i)delete.{0,80}(account|data)|erase.{0,80}(account|data)|remove.{0,80}(account|data)|data deletion|correct.{0,50}data|update.{0,50}data|rectif(y|ication)'
 
         - field: href
           operator: matches
-          value: "(?i)data-deletion|delete-data|delete-account|erase-data|remove-data|data-correction|correct-data|rectification"
+          value: '(?i)data-deletion|delete-data|delete-account|erase-data|remove-data|data-correction|correct-data|rectification'
+
+        - field: context_text
+          operator: matches
+          value: '(?i)(delete|erase|remove).{0,100}(personal information|personal data|data|account)|(account|data).{0,100}(delete|erasure|erase|remove)|rectif(y|ication)'
 
     result:
       pass: PASS
@@ -272,3 +279,1102 @@ rules:
     recommendation: >
       Provide users with a clear mechanism to request erasure or
       rectification of their personal data.
+
+
+  # -----------------------------------------------------------
+  # Batch 1A: Additional link-based privacy mechanisms
+  # -----------------------------------------------------------
+
+  - id: GDPR-011
+    name: Objection to processing mechanism exists
+    description: >
+      Detects a link that appears to let users object to processing,
+      opt out of specified processing, or control data sharing.
+      This is a heuristic detection, not proof that the mechanism works.
+    category: PRIVACY
+    source:
+      observation: link
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)right to object|object to (the )?processing|objecting to processing|opt.?out of (the )?(sale|sharing|processing|targeted advertising)|do not sell or share my (personal )?information|do not share or sell my info'
+        - field: href
+          operator: matches
+          value: '(?i)object-to-processing|opt.?out|do-not-sell|privacy-choices|data-sharing'
+        - field: context_text
+          operator: matches
+          value: '(?i)right to object|object to (the )?processing|opt.?out of (the )?(sale|sharing|processing|targeted advertising)'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Provide a clear mechanism for exercising applicable rights to
+      object to personal-data processing or opt out of specified uses.
+
+  - id: GDPR-012
+    name: Cookie preference center link exists
+    description: >
+      Detects a link that appears to provide access to cookie settings
+      or a consent preference center.
+    category: PRIVACY
+    source:
+      observation: link
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)cookie settings|cookie preferences|manage cookies|cookie choices|consent preferences|privacy choices|change cookie settings|manage consent'
+        - field: href
+          operator: matches
+          value: '(?i)cookie-settings|cookie-preferences|cookie-settings|consent-preferences|privacy-settings|cookie-consent'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Provide an accessible way for users to revisit and change their
+      cookie and consent preferences.
+
+  # -----------------------------------------------------------
+  # Batch 1B: DPO and supervisory authority information
+  # -----------------------------------------------------------
+
+  - id: GDPR-014
+    name: Data protection officer contact information detected
+    description: >
+      Detects explicit Data Protection Officer terminology together
+      with an email address or contact route in visible page text.
+      Applicability depends on the organisation's circumstances.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      all:
+        - field: text
+          operator: matches
+          value: '(?i)data protection officer|\bDPO\b'
+        - field: text
+          operator: matches
+          value: '(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|contact (the )?(data protection officer|DPO)'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Where a Data Protection Officer is required or designated,
+      publish appropriate contact details and make them accessible.
+
+  - id: GDPR-015
+    name: Supervisory authority or complaint information detected
+    description: >
+      Detects text mentioning a supervisory authority or the right
+      to lodge a data-protection complaint. It does not verify the
+      named authority or the completeness of the information.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)supervisory authority|right to lodge a complaint|right to complain to|data protection authority|data protection regulator'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Explain the applicable right to complain to a supervisory authority
+      and provide relevant authority information where appropriate.
+
+  # -----------------------------------------------------------
+  # Batch 1C: Privacy-policy disclosures
+  # -----------------------------------------------------------
+
+  - id: GDPR-031
+    name: Data controller information mentioned
+    description: >
+      Detects explicit references to a data controller in collected
+      visible text. It does not independently verify the controller's
+      legal identity or contact details.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)data controller|controller of your personal data|controller for your personal data|we are the controller|controller is'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Clearly identify the controller responsible for the relevant
+      personal-data processing in the privacy notice.
+
+  - id: GDPR-032
+    name: Processing purposes described
+    description: >
+      Detects text describing purposes for collecting or using
+      personal information.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)purposes? of (processing|collection)|how we use your (personal )?(data|information)|why we (collect|use|process) your (personal )?(data|information)|we use your (personal )?(data|information) to'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Explain the purposes for which personal data is collected and
+      processed in the privacy notice.
+
+  - id: GDPR-033
+    name: Legal basis for processing mentioned
+    description: >
+      Detects terminology commonly used to describe a legal basis
+      for personal-data processing. It does not validate whether
+      a particular basis is legally appropriate.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)legal basis|lawful basis|legitimate interests?|performance of (a )?contract|legal obligation|vital interests|public task|consent as a legal basis'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Describe the applicable legal basis for the relevant processing
+      purposes and ensure that the explanation is accurate.
+
+  - id: GDPR-034
+    name: Data recipients or recipient categories disclosed
+    description: >
+      Detects text mentioning data recipients, third parties, or
+      service providers with whom information may be shared.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)categories of recipients|data recipients|who we share (your )?(data|information) with|share (your )?(personal )?(data|information) with|third[- ]party recipients|service providers'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Explain the recipients or categories of recipients of personal data.
+
+  - id: GDPR-035
+    name: International transfers and safeguards mentioned
+    description: >
+      Detects references to international data transfers or commonly
+      used transfer safeguards. It does not establish that a transfer
+      is lawful or that appropriate safeguards are actually in place.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)international data transfers?|transferred outside (the )?(EEA|EU|UK)|outside the (EEA|EU)|standard contractual clauses|adequacy decision|binding corporate rules|safeguards for international transfers'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Disclose relevant international transfers and explain the applicable
+      transfer safeguards where required.
+
+  - id: GDPR-036
+    name: Data retention period or criteria mentioned
+    description: >
+      Detects statements about how long personal data is retained
+      or the criteria used to determine retention.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)retention period|retention policy|how long we (keep|retain|store)|retain your (personal )?(data|information)|for as long as (necessary|required)|kept for [0-9]+ (days|months|years)'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      State the retention periods or the criteria used to determine
+      how long personal data is kept.
+
+  - id: GDPR-037
+    name: Data subject rights mentioned
+    description: >
+      Detects mentions of common data subject rights in collected
+      visible text. It does not verify that every applicable right
+      is listed or that every right can be exercised successfully.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)right to access|right of access|right to rectification|right to erasure|right to data portability|right to object|restrict processing|data subject rights|your privacy rights'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Explain the applicable data subject rights and how individuals
+      can exercise them.
+
+  - id: GDPR-038
+    name: Right to withdraw consent mentioned
+    description: >
+      Detects text describing withdrawal of consent. It does not
+      verify that withdrawal is as easy as giving consent.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)withdraw (your )?consent|withdrawal of consent|right to withdraw consent|withdraw consent at any time'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Explain how users can withdraw consent and make the relevant
+      withdrawal process accessible.
+
+  - id: GDPR-039
+    name: Right to lodge a complaint mentioned
+    description: >
+      Detects wording about an individual's right to complain to a
+      supervisory authority or data protection regulator.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)right to lodge a complaint|right to complain|lodge a complaint with|complain to a supervisory authority|complaint to a data protection authority'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Explain the right to lodge a complaint with the relevant
+      supervisory authority.
+
+  - id: GDPR-040
+    name: Mandatory data provision or consequences mentioned
+    description: >
+      Detects statements about whether data provision is required
+      or what may happen if requested information is not provided.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)required to provide (your )?(personal )?(data|information)|mandatory to provide|if you (do not|don.t) provide|failure to provide (the )?(data|information)|whether providing (the )?(data|information) is required'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Explain whether providing requested personal data is a statutory
+      or contractual requirement and the consequences of not providing it,
+      where applicable.
+
+  - id: GDPR-041
+    name: Automated decision-making or profiling mentioned
+    description: >
+      Detects references to automated decision-making or profiling.
+      It does not verify that explanations of logic, significance,
+      and consequences are complete.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)automated decision[- ]making|automated decisions|profiling|solely automated processing'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Disclose relevant automated decision-making or profiling and
+      provide the applicable information about its logic and consequences.
+
+  - id: GDPR-042
+    name: Personal data breach notification information mentioned
+    description: >
+      Detects text that mentions a personal-data breach together with
+      notification or communication language. It does not establish
+      that an effective incident response process exists.
+    category: PRIVACY
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      all:
+        - field: text
+          operator: matches
+          value: '(?i)personal data breach|data breach|security breach'
+        - field: text
+          operator: matches
+          value: '(?i)notify|notification|inform you|notify you|communicate (with|to) affected'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: >
+      Explain relevant personal-data breach communication practices
+      and notification obligations where applicable.
+
+  - id: GDPR-017
+    name: Password fields use password input type
+    description: Checks whether labelled password-related inputs use HTML password masking.
+    category: SECURITY
+
+    applicability:
+      observation: dom_input
+      conditions:
+        all:
+          - field: label
+            operator: matches
+            value: "(?i)(password|passcode|pass phrase|passphrase)"
+
+    source:
+      observation: dom_input
+      match: none
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: label
+          operator: matches
+          value: "(?i)(password|passcode|pass phrase|passphrase)"
+        - field: type
+          operator: not_equals
+          value: password
+
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: Use type="password" for password-entry fields and inspect custom or unlabelled password controls manually.
+
+
+  - id: GDPR-026
+    name: POST forms use HTTPS destinations
+    description: Checks whether POST forms submit data to an insecure HTTP destination.
+    category: SECURITY
+
+    applicability:
+      observation: dom_form
+      conditions:
+        all:
+          - field: method
+            operator: matches
+            value: "(?i)^post$"
+
+    source:
+      observation: dom_form
+      match: none
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: method
+          operator: matches
+          value: "(?i)^post$"
+        - field: action
+          operator: matches
+          value: "(?i)^http://"
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: HIGH
+    recommendation: Submit forms containing personal data only to secure HTTPS destinations.
+
+  - id: GDPR-027-HSTS
+    name: HTTPS navigation response includes HSTS
+    description: Checks for the Strict-Transport-Security response header.
+    category: SECURITY
+
+    applicability:
+      observation: network_response
+      conditions:
+        all:
+          - field: protocol
+            operator: equals
+            value: https
+          - field: is_navigation_response
+            operator: equals
+            value: true
+          - field: content_type
+            operator: matches
+            value: "(?i)^text/html"
+
+    source:
+      observation: network_response
+      match: none
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: protocol
+          operator: equals
+          value: https
+        - field: is_navigation_response
+          operator: equals
+          value: true
+        - field: content_type
+          operator: matches
+          value: "(?i)^text/html"
+        - field: headers.strict-transport-security
+          operator: not_exists
+          value: true
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: MEDIUM
+    recommendation: Configure an appropriate Strict-Transport-Security policy on the HTTPS website.
+
+  - id: GDPR-027-CSP
+    name: HTTPS navigation response includes CSP
+    description: Checks for the Content-Security-Policy response header.
+    category: SECURITY
+
+    applicability:
+      observation: network_response
+      conditions:
+        all:
+          - field: protocol
+            operator: equals
+            value: https
+          - field: is_navigation_response
+            operator: equals
+            value: true
+          - field: content_type
+            operator: matches
+            value: "(?i)^text/html"
+
+    source:
+      observation: network_response
+      match: none
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: protocol
+          operator: equals
+          value: https
+        - field: is_navigation_response
+          operator: equals
+          value: true
+        - field: content_type
+          operator: matches
+          value: "(?i)^text/html"
+        - field: headers.content-security-policy
+          operator: not_exists
+          value: true
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: MEDIUM
+    recommendation: Define and test a suitable Content-Security-Policy for the website.
+
+  - id: GDPR-027-XCTO
+    name: HTTPS navigation response includes X-Content-Type-Options
+    description: Checks for the X-Content-Type-Options response header.
+    category: SECURITY
+
+    applicability:
+      observation: network_response
+      conditions:
+        all:
+          - field: protocol
+            operator: equals
+            value: https
+          - field: is_navigation_response
+            operator: equals
+            value: true
+          - field: content_type
+            operator: matches
+            value: "(?i)^text/html"
+
+    source:
+      observation: network_response
+      match: none
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: protocol
+          operator: equals
+          value: https
+        - field: is_navigation_response
+          operator: equals
+          value: true
+        - field: content_type
+          operator: matches
+          value: "(?i)^text/html"
+        - field: headers.x-content-type-options
+          operator: not_exists
+          value: true
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: MEDIUM
+    recommendation: Configure X-Content-Type-Options with the value nosniff.
+
+  - id: GDPR-027-REFPOL
+    name: HTTPS navigation response includes Referrer-Policy
+    description: Checks for the Referrer-Policy response header.
+    category: SECURITY
+
+    applicability:
+      observation: network_response
+      conditions:
+        all:
+          - field: protocol
+            operator: equals
+            value: https
+          - field: is_navigation_response
+            operator: equals
+            value: true
+          - field: content_type
+            operator: matches
+            value: "(?i)^text/html"
+
+    source:
+      observation: network_response
+      match: none
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: protocol
+          operator: equals
+          value: https
+        - field: is_navigation_response
+          operator: equals
+          value: true
+        - field: content_type
+          operator: matches
+          value: "(?i)^text/html"
+        - field: headers.referrer-policy
+          operator: not_exists
+          value: true
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: MEDIUM
+    recommendation: Configure a Referrer-Policy appropriate to the site's privacy and functionality requirements.
+
+  # -----------------------------------------------------------
+  # Previously added consent-interface checks
+  # -----------------------------------------------------------
+
+  - id: GDPR-001
+    name: Cookie or consent controls detected
+    description: Detects common cookie-banner or consent-control buttons on the scanned page.
+    category: CONSENT
+    source:
+      observation: dom_button
+      match: any
+    evaluator: declarative
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)cookie consent|cookie settings|cookie preferences|manage cookies|privacy choices|consent preferences|consent settings|accept all cookies|reject all cookies|decline all cookies|allow all cookies|only necessary cookies|accept all|reject all|decline all'
+        - field: aria_label
+          operator: matches
+          value: '(?i)cookie consent|cookie settings|cookie preferences|manage cookies|privacy choices|consent preferences|consent settings|accept all cookies|reject all cookies|decline all cookies|allow all cookies|only necessary cookies|accept all|reject all|decline all'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: Ensure that visitors are shown a clear consent interface when consent is required.
+
+  - id: GDPR-002
+    name: Consent checkboxes are unchecked by default
+    description: Flags relevant consent checkboxes that are already checked when the page is scanned.
+    category: CONSENT
+    applicability:
+      observation: dom_input
+      conditions:
+        all:
+          - field: type
+            operator: equals
+            value: checkbox
+          - field: label
+            operator: matches
+            value: '(?i)(consent|cookie|analytics|performance|marketing|advertis|personalization|tracking|newsletter|promotional|data processing|share (my|your) data)'
+    source:
+      observation: dom_input
+      match: none
+    evaluator: declarative
+    conditions:
+      all:
+        - field: type
+          operator: equals
+          value: checkbox
+        - field: checked
+          operator: equals
+          value: true
+        - field: label
+          operator: matches
+          value: '(?i)(consent|cookie|analytics|performance|marketing|advertis|personalization|tracking|newsletter|promotional|data processing|share (my|your) data)'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: HIGH
+    recommendation: Leave optional consent checkboxes unchecked by default and verify their initial state before user interaction.
+
+  - id: GDPR-004
+    name: Granular consent categories detected (heuristic)
+    description: Detects visible mentions of multiple common consent-category groups. It does not prove that each category has an independent, working control.
+    category: CONSENT
+    applicability:
+      observation: dom_button
+      conditions:
+        any:
+          - field: text
+            operator: matches
+            value: '(?i)cookie consent|cookie settings|cookie preferences|manage cookies|privacy choices|consent preferences|consent settings|accept all cookies|reject all cookies|decline all cookies|allow all cookies|only necessary cookies|accept all|reject all|decline all'
+          - field: aria_label
+            operator: matches
+            value: '(?i)cookie consent|cookie settings|cookie preferences|manage cookies|privacy choices|consent preferences|consent settings|accept all cookies|reject all cookies|decline all cookies|allow all cookies|only necessary cookies|accept all|reject all|decline all'
+    source:
+      observation: dom_visible_text
+      match: any
+    evaluator: declarative
+    conditions:
+      all:
+        - field: text
+          operator: matches
+          value: '(?is)(?:(?=.*\b(?:necessary|essential|strictly necessary|functional|preferences)\b)(?=.*\b(?:analytics|performance|statistics|marketing|advertising|personalization|targeted)\b)|(?=.*\b(?:analytics|performance|statistics)\b)(?=.*\b(?:marketing|advertising|personalization|targeted)\b))'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: MEDIUM
+    recommendation: Provide clear, independently selectable controls for distinct consent categories where applicable, and verify those controls manually.
+
+  - id: GDPR-005
+    name: Marketing consent not visibly combined with terms acceptance
+    description: Flags a single checkbox label that appears to combine acceptance of terms with marketing messages.
+    category: CONSENT
+    applicability:
+      observation: dom_input
+      conditions:
+        all:
+          - field: type
+            operator: equals
+            value: checkbox
+          - field: label
+            operator: matches
+            value: '(?i)(marketing|promotional|newsletter|advertising|offers|product updates|terms of service|terms and conditions|terms & conditions|agree to the terms|accept the terms)'
+    source:
+      observation: dom_input
+      match: none
+    evaluator: declarative
+    conditions:
+      all:
+        - field: type
+          operator: equals
+          value: checkbox
+        - field: label
+          operator: matches
+          value: '(?is)(?=.*\b(?:terms of service|terms and conditions|terms & conditions|agree to the terms|accept the terms)\b)(?=.*\b(?:marketing|promotional|newsletter|advertising|offers|product updates)\b)'
+    result:
+      pass: PASS
+      fail: FAIL
+    severity: HIGH
+    recommendation: Keep marketing permission separate from acceptance of terms and conditions, and review whether marketing consent is freely given.
+
+
+  # -----------------------------------------------------------
+  # Batch 2: Heuristic checks for signals before consent
+  # These rules identify known indicators only; they are not proof
+  # that a cookie/storage item/request is legally non-essential.
+  # -----------------------------------------------------------
+
+  - id: GDPR-020
+    name: No known tracking-cookie indicators before consent
+    description: >
+      Checks for common analytics or advertising cookie-name indicators
+      in the fresh browser state before the consent action. This is a
+      heuristic and does not classify every cookie's purpose.
+    category: CONSENT
+    applicability:
+      observation: cookie
+      conditions:
+        all:
+          - field: consent_phase
+            operator: equals
+            value: before_consent
+    source:
+      observation: cookie
+      match: all
+    evaluator: declarative
+    conditions:
+      all:
+        - field: consent_phase
+          operator: equals
+          value: before_consent
+        - field: name
+          operator: matches
+          value: '(?i)^(?!_ga(?:_|$)|_gid$|_gat(?:_|$)|_fbp$|_fbc$|fr$|ide$|test_cookie$|muid$|anonchk$|mr$|_uetsid$|_uetvid$|ttcsid.*$|ttclid$|_hj.*$|mp_.*$|ajs_.*$|amplitude.*$|optimizely.*$|__utm.*$).+'
+    result:
+      pass: PASS
+      fail: WARNING
+    severity: MEDIUM
+    recommendation: >
+      Review cookies flagged by known analytics or advertising indicators
+      and verify whether any non-essential cookies are set before consent.
+
+  - id: GDPR-021-LOCAL
+    name: No obvious tracking keys in localStorage before consent
+    description: >
+      Checks localStorage keys for common analytics, advertising, or
+      tracking indicators before the consent action.
+    category: CONSENT
+    applicability:
+      observation: local_storage
+      conditions:
+        all:
+          - field: consent_phase
+            operator: equals
+            value: before_consent
+    source:
+      observation: local_storage
+      match: all
+    evaluator: declarative
+    conditions:
+      all:
+        - field: consent_phase
+          operator: equals
+          value: before_consent
+        - field: key
+          operator: matches
+          value: '(?i)^(?!.*(?:analytics|tracking|track(?:er|ing)?|pixel|advert|marketing|campaign|optimizely|segment|mixpanel|amplitude|hotjar|clarity|facebook|tiktok|intercom|heap|posthog|matomo|gtag|ga_|permutive|contentsquare|content.?square|(?:^|[^a-z])cx(?:[_-]|$))).+'
+    result:
+      pass: PASS
+      fail: WARNING
+    severity: MEDIUM
+    recommendation: >
+      Review flagged localStorage keys and confirm whether the associated
+      data is necessary before consent or used for analytics or advertising.
+
+  - id: GDPR-021-SESSION
+    name: No obvious tracking keys in sessionStorage before consent
+    description: >
+      Checks sessionStorage keys for common analytics, advertising, or
+      tracking indicators before the consent action.
+    category: CONSENT
+    applicability:
+      observation: session_storage
+      conditions:
+        all:
+          - field: consent_phase
+            operator: equals
+            value: before_consent
+    source:
+      observation: session_storage
+      match: all
+    evaluator: declarative
+    conditions:
+      all:
+        - field: consent_phase
+          operator: equals
+          value: before_consent
+        - field: key
+          operator: matches
+          value: '(?i)^(?!.*(?:analytics|tracking|track(?:er|ing)?|pixel|advert|marketing|campaign|optimizely|segment|mixpanel|amplitude|hotjar|clarity|facebook|tiktok|intercom|heap|posthog|matomo|gtag|ga_|permutive|contentsquare|content.?square|(?:^|[^a-z])cx(?:[_-]|$))).+'
+    result:
+      pass: PASS
+      fail: WARNING
+    severity: MEDIUM
+    recommendation: >
+      Review flagged sessionStorage keys and confirm whether the associated
+      data is necessary before consent or used for analytics or advertising.
+
+  - id: GDPR-021-IDB
+    name: No obvious tracking keys in IndexedDB before consent
+    description: >
+      Checks IndexedDB record keys for common analytics, advertising, or
+      tracking indicators before the consent action.
+    category: CONSENT
+    applicability:
+      observation: indexed_db
+      conditions:
+        all:
+          - field: consent_phase
+            operator: equals
+            value: before_consent
+    source:
+      observation: indexed_db
+      match: all
+    evaluator: declarative
+    conditions:
+      all:
+        - field: consent_phase
+          operator: equals
+          value: before_consent
+        - field: key
+          operator: matches
+          value: '(?i)^(?!.*(?:analytics|tracking|track(?:er|ing)?|pixel|advert|marketing|campaign|optimizely|segment|mixpanel|amplitude|hotjar|clarity|facebook|tiktok|intercom|heap|posthog|matomo|gtag|ga_|permutive|contentsquare|content.?square|(?:^|[^a-z])cx(?:[_-]|$))).+'
+    result:
+      pass: PASS
+      fail: WARNING
+    severity: MEDIUM
+    recommendation: >
+      Review flagged IndexedDB keys and confirm whether the associated
+      data is necessary before consent or used for analytics or advertising.
+
+  - id: GDPR-022
+    name: No known tracker-domain requests before consent
+    description: >
+      Checks pre-consent requests for common analytics and advertising
+      domains. Domain matching is heuristic and may miss unknown trackers
+      or flag requests that have a legitimate purpose.
+    category: CONSENT
+    applicability:
+      observation: network_request
+      conditions:
+        all:
+          - field: consent_phase
+            operator: equals
+            value: before_consent
+    source:
+      observation: network_request
+      match: all
+    evaluator: declarative
+    conditions:
+      all:
+        - field: consent_phase
+          operator: equals
+          value: before_consent
+        - field: url
+          operator: matches
+          value: '(?i)^(?!.*(?:google-analytics\.com|googletagmanager\.com|doubleclick\.net|googleadservices\.com|googlesyndication\.com|facebook\.net|connect\.facebook\.net|facebook\.com|meta\.com|analytics\.tiktok\.com|tiktok\.com|bat\.bing\.com|clarity\.ms|hotjar\.com|hotjar\.io|segment\.io|segment\.com|mixpanel\.com|amplitude\.com|fullstory\.com|heap\.io|posthog\.com|optimizely\.com|scorecardresearch\.com|quantserve\.com|demdex\.net|adnxs\.com|criteo\.com|taboola\.com|outbrain\.com|snap\.licdn\.com)).+'
+    result:
+      pass: PASS
+      fail: WARNING
+    severity: HIGH
+    recommendation: >
+      Review flagged requests and verify whether they initiate non-essential
+      tracking before consent. A warning requires manual purpose classification.
+
+
+
+  - id: GDPR-007
+    name: Privacy policy reachable within two clicks
+    description: Detects privacy-policy links found on the homepage or on pages one navigation level below it.
+    category: PRIVACY
+
+    source:
+      observation: link
+      match: any
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: href
+          operator: matches
+          value: '(?i)privacy|data-protection|privacy-notice|privacy-policy'
+        - field: crawl_depth
+          operator: less_than
+          value: 2
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: MEDIUM
+    recommendation: Provide a privacy-policy link that users can reach within two clicks from the homepage.
+
+  - id: GDPR-013
+    name: Age verification control detected for age-restricted content
+    description: Checks for common age-verification wording when the visible page text suggests age-restricted products or services.
+
+    category: PRIVACY
+
+    applicability:
+      observation: dom_visible_text
+      conditions:
+        any:
+          - field: text
+            operator: matches
+            value: '(?is)(buy|purchase|order|sell|selling).{0,40}(alcohol|beer|wine|spirits|tobacco|nicotine|vape)|\b(casino|sports betting|online gambling|adult content)\b'
+
+    source:
+      observation: dom_button
+      match: any
+
+    evaluator: declarative
+
+    conditions:
+      any:
+        - field: text
+          operator: matches
+          value: '(?i)confirm your age|verify your age|age verification|date of birth|enter your birth date|I am 18|I am over 18|18 years or older|yes,? I am'
+        - field: aria_label
+          operator: matches
+          value: '(?i)confirm your age|verify your age|age verification|date of birth|enter your birth date|I am 18|I am over 18|18 years or older|yes,? I am'
+
+    result:
+      pass: PASS
+      fail: FAIL
+
+    severity: MEDIUM
+    recommendation: Where age verification is required, provide an appropriate age-check mechanism before access to restricted content or services.
+
+
+
+  - id: GDPR-016
+    name: Special-category data fields require consent review
+    description: Detects fields whose labels suggest special-category personal data and flags them for manual review of explicit consent controls.
+    category: PRIVACY
+
+    applicability:
+      observation: dom_input
+      conditions:
+        any:
+          - field: label
+            operator: matches
+            value: '(?i)\b(health|medical|diagnos\w*|disabilit\w*|religio\w*|racial|race|ethnic origin|political opinion|political affiliation|biometric|genetic|sexual orientation|sex life|trade union|union membership)\b'
+
+    source:
+      observation: dom_input
+      match: none
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: label
+          operator: matches
+          value: '(?i)\b(health|medical|diagnos\w*|disabilit\w*|religio\w*|racial|race|ethnic origin|political opinion|political affiliation|biometric|genetic|sexual orientation|sex life|trade union|union membership)\b'
+
+    result:
+      pass: PASS
+      fail: WARNING
+
+    severity: HIGH
+    recommendation: Review the relevant form for an explicit, specific consent mechanism where required. Confirm manually that the control is separate, voluntary, and not preselected.
+    
+  - id: GDPR-019
+    name: Potential cookie wall or tracking wall
+    description: Flags a potential consent wall when pre-consent text explicitly makes cookie acceptance a condition of access and the layout indicates scroll locking with a consent-related fixed element.
+    category: CONSENT
+
+    applicability:
+      observation: dom_visible_text
+      conditions:
+        all:
+          - field: consent_phase
+            operator: equals
+            value: before_consent
+          - field: text
+            operator: matches
+            value: '(?i)must accept cookies|accept cookies to continue|accept cookies to access|cookies? (are )?required to continue|continue only if you accept|you must enable cookies'
+
+    source:
+      observation: dom_layout
+      match: none
+
+    evaluator: declarative
+
+    conditions:
+      all:
+        - field: consent_phase
+          operator: equals
+          value: before_consent
+        - field: body_overflow_y
+          operator: equals
+          value: hidden
+        - field: consent_related_fixed_element_count
+          operator: greater_than
+          value: 0
+
+    result:
+      pass: PASS
+      fail: WARNING
+
+    severity: MEDIUM
+    recommendation: Review whether users are forced to accept non-essential cookies or tracking to access the service. Confirm manually whether the overlay actually prevents access and whether an appropriate alternative is provided.

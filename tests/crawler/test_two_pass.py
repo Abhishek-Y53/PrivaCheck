@@ -47,25 +47,20 @@ class FakeContext:
 
 
 class FakeBrowser:
-
     def __init__(self):
         self.next_id = 1
         self.created_context_ids = []
+        self.context_options = []
 
-    async def new_context(self):
+    async def new_context(self, **kwargs):
+        # Record options passed by the production code.
+        self.context_options.append(kwargs.copy())
 
         context_id = self.next_id
-
         self.next_id += 1
+        self.created_context_ids.append(context_id)
 
-        self.created_context_ids.append(
-            context_id
-        )
-
-        return FakeContext(
-            self,
-            context_id,
-        )
+        return FakeContext(self, context_id)
 
 
 class FakeSinglePassRunner:
@@ -178,6 +173,11 @@ async def test_two_pass_uses_fresh_context_for_each_pass(
     assert browser.created_context_ids == [
         1,
         2,
+    ]
+
+    assert browser.context_options == [
+    {"service_workers": "block"},
+    {"service_workers": "block"},
     ]
 
     assert (

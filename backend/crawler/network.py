@@ -70,6 +70,7 @@ class NetworkCollector:
         request = response.request
         request_id = self._request_ids.get(request)
         parsed_url = urlparse(response.url)
+        response_headers = response.headers
 
         data = {
             "request_id": request_id,
@@ -77,8 +78,10 @@ class NetworkCollector:
             "hostname": parsed_url.hostname,
             "protocol": parsed_url.scheme,
             "status": response.status,
-            "headers": response.headers,
+            "headers": response_headers,
             "status_text": response.status_text,
+            "is_navigation_response": request.is_navigation_request(),
+            "content_type": response_headers.get("content-type", "").lower(),
         }
 
         self.observations.append(
@@ -87,5 +90,5 @@ class NetworkCollector:
                 source_url=self.source_url,
                 timestamp=time.time(),
                 data=data,
-            )
         )
+    )

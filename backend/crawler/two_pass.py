@@ -10,6 +10,7 @@ from playwright.async_api import Browser, BrowserContext, Page
 
 from backend.crawler.pass_runner import SinglePassRunner
 from backend.schemas.core import CrawlerStatus, Observation
+from backend.security.url_validation import normalize_http_url
 
 
 ConsentAction = Literal["accept", "reject"]
@@ -151,7 +152,7 @@ class TwoPassRunner:
 
         self.page = page
         self.context = context
-        self.url = url
+        self.url = normalize_http_url(url)
         self.wait_ms = wait_ms
         self.consent_wait_ms = consent_wait_ms
         self.consent_config = (
@@ -224,7 +225,7 @@ class TwoPassRunner:
             # IMPORTANT:
             # Create a completely new context for every pass.
             pass_context = (
-                await self.browser.new_context()
+                await self.browser.new_context(service_workers="block")
             )
 
             pass_page = (

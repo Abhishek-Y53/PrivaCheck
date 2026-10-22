@@ -295,11 +295,21 @@ class DOMCollector:
                     };
                 });
 
+                const consentRelatedFixedElementCount = fixedElements.filter(
+                    element =>
+                        /cookie|consent|privacy|cmp|preference|overlay/i.test(
+                            `${element.id || ""} ${element.class_name || ""}`
+                        )
+                ).length;
+
                 return {
                     body_overflow: bodyStyle.overflow,
                     body_overflow_x: bodyStyle.overflowX,
                     body_overflow_y: bodyStyle.overflowY,
-                    fixed_elements: fixedElements
+                    fixed_elements: fixedElements,
+                    fixed_element_count: fixedElements.length,
+                    consent_related_fixed_element_count:
+                        consentRelatedFixedElementCount
                 };
             }
             """

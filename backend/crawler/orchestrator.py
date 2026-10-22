@@ -1,4 +1,4 @@
-
+import logging
 import time
 from typing import List
 from urllib.parse import urlparse
@@ -12,6 +12,15 @@ from backend.crawler.links import LinkCollector
 from backend.crawler.page_traversal import PageTraversalCollector
 from backend.crawler.tls import TLSCollector
 from backend.schemas.core import Observation, CrawlerResult
+from backend.security.url_validation import (
+    PublicNetworkGuard,
+    URLValidationError,
+    normalize_http_url,
+    validate_public_http_url,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class CrawlerOrchestrator:
@@ -79,35 +88,84 @@ class CrawlerOrchestrator:
         context = None
         page = None
         network_collector = None
-        final_url = self.url
+
+        final_url = ""
+        validated_url = ""
+        stage = "initialization"
 
         try:
-            # Start browser.
+            # --------------------------------------------------
+            # 1. Validate the supplied URL.
+            # --------------------------------------------------
+
+            # Reject malformed schemes, credentials, unsupported
+            # ports, and non-public IP literals before launching
+            # the browser.
+            stage = "URL normalization"
+            validated_url = normalize_http_url(self.url)
+
+            # --------------------------------------------------
+            # 2. Start browser and create an isolated context.
+            # --------------------------------------------------
+
+            stage = "browser startup"
             await self.browser_manager.start()
 
-            # Create isolated browser context and initial page.
+            stage = "browser context and page creation"
             context, page = (
                 await self.browser_manager.create_context_and_page()
             )
 
-            # Start network collection BEFORE navigation.
-            network_collector = NetworkCollector(page, self.url)
-            network_collector.start_collecting()
+            # --------------------------------------------------
+            # 3. Install the HTTP and WebSocket security guard.
+            # --------------------------------------------------
 
-            # Navigate to the target website.
-            await page.goto(
-                self.url,
-                wait_until="domcontentloaded",
+            # Install the guard before making any network request.
+            # The guard also applies to pages opened during traversal.
+            stage = "security guard installation"
+
+            request_guard = PublicNetworkGuard()
+            await request_guard.install(context)
+
+            # Re-resolve and validate the target immediately before
+            # navigation to reduce DNS-rebinding risk.
+            stage = "public target validation"
+            validated_url = await validate_public_http_url(
+                validated_url
             )
 
-            # Give dynamically loaded content some time to appear.
+            # --------------------------------------------------
+            # 4. Start network collection before navigation.
+            # --------------------------------------------------
+
+            stage = "network collector initialization"
+
+            network_collector = NetworkCollector(
+                page,
+                validated_url,
+            )
+            network_collector.start_collecting()
+
+            # --------------------------------------------------
+            # 5. Navigate to the target website.
+            # --------------------------------------------------
+
+            stage = "initial page navigation"
+
+            await page.goto(
+                validated_url,
+                wait_until="domcontentloaded",
+                timeout=30_000,
+            )
+
+            # Allow dynamically loaded content some time to appear.
+            stage = "waiting for dynamic content"
             await page.wait_for_timeout(3000)
 
-            # Use the final URL after redirects.
             final_url = page.url
 
             # --------------------------------------------------
-            # 1. Collect observations from the initial page.
+            # 6. Collect observations from the initial page.
             # --------------------------------------------------
 
             dom_collector = DOMCollector(page, final_url)
@@ -116,100 +174,97 @@ class CrawlerOrchestrator:
             storage_collector = StorageCollector(page, final_url)
             tls_collector = TLSCollector()
 
+            stage = "DOM observation collection"
             dom_observations = await dom_collector.collect_all()
 
-            # Preserve all original homepage link observations.
+            # Preserve homepage link observations separately.
+            stage = "homepage link collection"
+
             link_observations = (
                 await link_collector.collect_links()
             )
-            # Mark original homepage links with crawl depth 0.
+
+            # Mark homepage links with crawl depth 0.
             for observation in link_observations:
                 observation.data.setdefault("crawl_depth", 0)
 
+            stage = "cookie collection"
             cookie_observations = (
                 await cookie_collector.collect()
             )
 
+            stage = "storage collection"
             storage_observations = (
                 await storage_collector.collect_all()
             )
 
             # --------------------------------------------------
-            # 2. Traverse internal pages.
+            # 7. Traverse eligible internal pages.
             # --------------------------------------------------
-            #
-            # This collects links and visible text from the
-            # homepage and eligible internal pages.
-            #
-            # The standalone LinkCollector above is retained so
-            # the original homepage links remain available even
-            # if traversal fails.
             #
             # Limits:
             #   Maximum depth: 2
             #   Maximum visited pages: 10
+            #
+            # Traversal is an additional capability. If it fails,
+            # retain the observations already collected from the
+            # initial page.
 
             traversal_observations: List[Observation] = []
 
             try:
+                stage = "internal page traversal"
+
                 traversal_collector = PageTraversalCollector(
-                context=context,
-                start_url=final_url,
-                max_depth=2,
-                max_pages=10,
-                priority_keywords=[
-        # Privacy notices and consent
-                "privacy",
-                "cookie",
-                "consent",
-                "data protection",
+                    context=context,
+                    start_url=final_url,
+                    max_depth=2,
+                    max_pages=10,
+                    priority_keywords=[
+                        # Privacy notices and consent
+                        "privacy",
+                        "cookie",
+                        "consent",
+                        "data protection",
 
-        # Data subject rights
-                "personal data",
-        "data access",
-        "subject access",
-        "data rights",
-        "dsar",
-        "rectification",
+                        # Data subject rights
+                        "personal data",
+                        "data access",
+                        "subject access",
+                        "data rights",
+                        "dsar",
+                        "rectification",
 
-        # Data export and deletion
-        "export data",
-        "download data",
-        "delete data",
-        "delete account",
-        "erase data",
-        "data deletion",
+                        # Data export and deletion
+                        "export data",
+                        "download data",
+                        "delete data",
+                        "delete account",
+                        "erase data",
+                        "data deletion",
 
-        # Account and privacy settings
-        "settings",
-        "account",
-        "preferences",
-    ],
-)
+                        # Account and privacy settings
+                        "settings",
+                        "account",
+                        "preferences",
+                    ],
+                )
 
                 traversal_observations = (
                     await traversal_collector.collect()
                 )
 
-            except Exception as traversal_error:
-                # Traversal is an additional capability.
-                # A traversal failure should not discard the
-                # observations already collected from the
-                # initial page.
-                print(
-                    "Page traversal failed:",
-                    str(traversal_error),
+            except Exception:
+                # Log the full traceback in the server console.
+                # Do not discard observations from the initial page.
+                logger.exception(
+                    "Page traversal failed; preserving initial-page "
+                    "observations"
                 )
 
-            # The traversal also collects homepage links.
-            # Remove those depth-0 link observations because the
-            # standalone LinkCollector already collected them.
-            #
-            # Keep:
-            # - The original homepage links.
-            # - Links discovered on child pages.
-            # - Visible text from every successfully visited page.
-
+            # The standalone LinkCollector already collected
+            # homepage links. Remove duplicate depth-0 links from
+            # the traversal results.
             traversal_observations = [
                 observation
                 for observation in traversal_observations
@@ -220,11 +275,8 @@ class CrawlerOrchestrator:
             ]
 
             # --------------------------------------------------
-            # 3. Build page-level context for the initial page.
+            # 8. Build page-level context for the initial page.
             # --------------------------------------------------
-            #
-            # Page context remains based on the initial page.
-            # We do not mix form counts from child pages into it.
 
             page_context_observation = (
                 self._build_page_context_observation(
@@ -234,8 +286,18 @@ class CrawlerOrchestrator:
             )
 
             # --------------------------------------------------
-            # 4. Collect TLS evidence for the initial page.
+            # 9. Collect TLS evidence.
             # --------------------------------------------------
+
+            # TLSCollector makes its own outbound connection outside
+            # Playwright routing. Validate the final URL again first.
+            #
+            # Production network egress restrictions are still needed
+            # to address DNS validation-to-connection race conditions.
+
+            stage = "TLS evidence collection"
+
+            await validate_public_http_url(final_url)
 
             tls_observation = tls_collector.verify(
                 final_url,
@@ -243,12 +305,10 @@ class CrawlerOrchestrator:
             )
 
             # --------------------------------------------------
-            # 5. Finish network collection for the initial page.
+            # 10. Finish network collection.
             # --------------------------------------------------
-            #
-            # NetworkCollector is attached to the initial page.
-            # Network observations from traversal pages are not
-            # collected by this existing collector.
+
+            stage = "network observation collection"
 
             network_collector.stop_collecting()
 
@@ -257,7 +317,7 @@ class CrawlerOrchestrator:
             )
 
             # --------------------------------------------------
-            # 6. Combine all observations.
+            # 11. Combine all observations.
             # --------------------------------------------------
 
             observations.extend(dom_observations)
@@ -275,10 +335,15 @@ class CrawlerOrchestrator:
             observations.append(page_context_observation)
             observations.append(tls_observation)
 
+            # --------------------------------------------------
+            # 12. Return the completed crawler result.
+            # --------------------------------------------------
+
+            stage = "building crawler result"
             completed_at = time.time()
 
             return CrawlerResult(
-                target_url=self.url,
+                target_url=validated_url,
                 final_url=final_url,
                 observations=observations,
                 started_at=started_at,
@@ -287,30 +352,72 @@ class CrawlerOrchestrator:
             )
 
         except Exception as e:
+            # Record the underlying exception and traceback in the
+            # server logs, together with the stage that was running.
+            #
+            # Unexpected exception details are not returned to the
+            # API caller. URL validation errors retain their existing
+            # specific error behavior.
+
+            logger.exception(
+                "Crawler failed during stage: %s",
+                stage,
+            )
+
             completed_at = time.time()
 
             return CrawlerResult(
-                target_url=self.url,
+                target_url=validated_url,
                 final_url=final_url,
                 observations=observations,
                 started_at=started_at,
                 completed_at=completed_at,
                 status="FAILED",
-                error=str(e),
+                error=(
+                    str(e)
+                    if isinstance(e, URLValidationError)
+                    else (
+                        "Scan failed during navigation, traversal, "
+                        "or evidence collection."
+                    )
+                ),
             )
 
         finally:
-            # Ensure network listeners are removed.
+            # --------------------------------------------------
+            # 13. Clean up browser resources safely.
+            # --------------------------------------------------
+            #
+            # Cleanup failures are logged but should not replace
+            # the crawler result or mask the original exception.
+
             if network_collector is not None:
-                network_collector.stop_collecting()
+                try:
+                    network_collector.stop_collecting()
+                except Exception:
+                    logger.exception(
+                        "Failed to stop network collection cleanly"
+                    )
 
-            # Close the initial page.
             if page is not None:
-                await page.close()
+                try:
+                    await page.close()
+                except Exception:
+                    logger.exception(
+                        "Failed to close the initial page cleanly"
+                    )
 
-            # Close the browser context, including traversal pages.
             if context is not None:
-                await context.close()
+                try:
+                    await context.close()
+                except Exception:
+                    logger.exception(
+                        "Failed to close the browser context cleanly"
+                    )
 
-            # Stop the browser.
-            await self.browser_manager.stop()
+            try:
+                await self.browser_manager.stop()
+            except Exception:
+                logger.exception(
+                    "Failed to stop the browser cleanly"
+                )
