@@ -3,22 +3,190 @@ services:
     image: postgres:17
     container_name: privacheck-postgres
     environment:
-      POSTGRES_DB: privacheck
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-privacheck}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     restart: unless-stopped
 
   valkey:
     image: valkey/valkey:8
     container_name: privacheck-valkey
+    command: ["valkey-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${VALKEY_PORT:-6379}:6379"
     volumes:
       - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  migrate:
+    image: privacheck-backend:local
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: privacheck-migrate
+    environment: &backend_environment
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-privacheck}"
+      BROKER_URL: redis://valkey:6379/0
+      AUTH_RATE_LIMIT_REDIS_URL: redis://valkey:6379/1
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      AUTH_SESSION_TTL_DAYS: ${AUTH_SESSION_TTL_DAYS:-7}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE:-lax}
+      AUTH_LOGIN_RATE_LIMIT: ${AUTH_LOGIN_RATE_LIMIT:-5}
+      AUTH_LOGIN_RATE_WINDOW_SECONDS: ${AUTH_LOGIN_RATE_WINDOW_SECONDS:-60}
+      AUTH_REGISTER_RATE_LIMIT: ${AUTH_REGISTER_RATE_LIMIT:-3}
+      AUTH_REGISTER_RATE_WINDOW_SECONDS: ${AUTH_REGISTER_RATE_WINDOW_SECONDS:-3600}
+      CRAWLER_TIMEOUT_SECONDS: ${CRAWLER_TIMEOUT_SECONDS:-180}
+      CRAWLER_HEADLESS: "true"
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-5}
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: privacheck-backend:local
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: privacheck-api
+    environment: *backend_environment
+    command: ["python", "-m", "uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+
+  crawler-worker:
+    image: privacheck-backend:local
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: privacheck-crawler-worker
+    hostname: privacheck-crawler
+    environment: *backend_environment
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - backend.services.crawler_service.celery_app:crawler_celery_app
+      - worker
+      - --loglevel=INFO
+      - --pool=prefork
+      - --concurrency=1
+      - --queues=crawler.scan
+      - --hostname=crawler@%h
+      - --max-tasks-per-child=20
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    shm_size: 1gb
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -m celery -A backend.services.crawler_service.celery_app:crawler_celery_app inspect --destination=crawler@privacheck-crawler --timeout=5 ping | grep -q pong
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 45s
+
+  compliance-worker:
+    image: privacheck-backend:local
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: privacheck-compliance-worker
+    hostname: privacheck-compliance
+    environment: *backend_environment
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - backend.services.compliance_service.celery_app:compliance_celery_app
+      - worker
+      - --loglevel=INFO
+      - --pool=prefork
+      - --concurrency=2
+      - --queues=compliance.evaluate
+      - --hostname=compliance@%h
+      - --max-tasks-per-child=50
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -m celery -A backend.services.compliance_service.celery_app:compliance_celery_app inspect --destination=compliance@privacheck-compliance --timeout=5 ping | grep -q pong
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 45s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:${API_PORT:-8000}
+    container_name: privacheck-frontend
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

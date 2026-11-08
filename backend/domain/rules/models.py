@@ -1,5 +1,6 @@
-from typing import Any, Dict, List, Optional, Literal
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.schemas.core import ComplianceStatus, SeverityLevel
 
@@ -41,6 +42,14 @@ class StateDiffConfig(BaseModel):
         "reject_superset_of_accept",
     ] = "equal"
 
+
+class RuleApplicability(BaseModel):
+    """Defines when a rule should be evaluated."""
+
+    observation: str
+    conditions: RuleConditions
+
+
 class Rule(BaseModel):
     id: str
     name: str
@@ -54,13 +63,3 @@ class Rule(BaseModel):
     state_diff: Optional[StateDiffConfig] = None
     severity: SeverityLevel
     recommendation: Optional[str] = None
-    
-class RuleApplicability(BaseModel):
-    """
-    Defines when a rule should be evaluated.
-    A rule is applicable when at least one observation of the
-    configured category satisfies the configured conditions.
-    """
-
-    observation: str
-    conditions: RuleConditions

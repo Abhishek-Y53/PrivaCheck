@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Awaitable, Callable
 
 from backend.api.schemas import ScanRequest, ScanResponse
 from backend.api.services.scan_pipeline import ScanPipelineService
+from backend.schemas.core import Observation
+
+
+ObservationSink = Callable[[list[Observation]], Awaitable[None]]
 
 
 class ScanService:
@@ -20,11 +24,29 @@ class ScanService:
     def __init__(self, pipeline: ScanPipelineService | None = None) -> None:
         self.pipeline = pipeline or ScanPipelineService()
 
-    async def scan(self, request: ScanRequest) -> ScanResponse:
-        report = await self.pipeline.scan(
-            url=str(request.website),
-            framework=request.framework,
-        )
+    async def scan(
+        self,
+        request: ScanRequest,
+        *,
+        observation_sink: ObservationSink | None = None,
+    ) -> ScanResponse:
+        """Run the assessment and optionally stage raw observations.
+
+        The sink is an internal persistence hook. It is invoked by the pipeline
+        after collection and before rule evaluation; it is never exposed to API
+        clients.
+        """
+        if observation_sink is None:
+            report = await self.pipeline.scan(
+                url=str(request.website),
+                framework=request.framework,
+            )
+        else:
+            report = await self.pipeline.scan(
+                url=str(request.website),
+                framework=request.framework,
+                observation_sink=observation_sink,
+            )
 
         crawler_status = str(
             report.metadata.get("crawler_status", "UNKNOWN")

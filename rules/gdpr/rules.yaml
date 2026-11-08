@@ -288,9 +288,10 @@ rules:
   - id: GDPR-011
     name: Objection to processing mechanism exists
     description: >
-      Detects a link that appears to let users object to processing,
-      opt out of specified processing, or control data sharing.
-      This is a heuristic detection, not proof that the mechanism works.
+      Detects a link whose text, URL, or surrounding context explicitly
+      indicates an objection to processing or an opt-out from direct marketing
+      or targeted advertising. Generic privacy-choice and do-not-sell labels
+      alone are not sufficient evidence of a GDPR-specific objection mechanism.
     category: PRIVACY
     source:
       observation: link
@@ -300,20 +301,21 @@ rules:
       any:
         - field: text
           operator: matches
-          value: '(?i)right to object|object to (the )?processing|objecting to processing|opt.?out of (the )?(sale|sharing|processing|targeted advertising)|do not sell or share my (personal )?information|do not share or sell my info'
+          value: '(?i)\b(?:right to object|object to (?:the )?processing|objecting to (?:the )?processing|objection to (?:the )?processing|opt.?out of (?:the )?(?:processing|direct marketing|targeted advertising)|object to direct marketing|stop direct marketing)\b'
         - field: href
           operator: matches
-          value: '(?i)object-to-processing|opt.?out|do-not-sell|privacy-choices|data-sharing'
+          value: '(?i)(?:right-to-object|object-to-processing|objection-to-processing|processing-objection|direct-marketing-opt.?out|opt.?out-of-(?:processing|direct-marketing|targeted-advertising))'
         - field: context_text
           operator: matches
-          value: '(?i)right to object|object to (the )?processing|opt.?out of (the )?(sale|sharing|processing|targeted advertising)'
+          value: '(?i)\b(?:right to object|object to (?:the )?processing|objecting to (?:the )?processing|objection to (?:the )?processing|opt.?out of (?:the )?(?:processing|direct marketing|targeted advertising)|object to direct marketing|stop direct marketing)\b'
     result:
       pass: PASS
       fail: FAIL
     severity: MEDIUM
     recommendation: >
-      Provide a clear mechanism for exercising applicable rights to
-      object to personal-data processing or opt out of specified uses.
+      Provide a clear mechanism for exercising applicable rights to object
+      to personal-data processing or opt out of specified uses.
+
 
   - id: GDPR-012
     name: Cookie preference center link exists
