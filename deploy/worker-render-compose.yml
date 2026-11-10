@@ -1,0 +1,52 @@
+# Run separately from docker-compose.yml: NO local database or message broker.
+name: privacheck-render-workers
+
+x-remote: &remote
+  env_file:
+    - ../.env.render-workers
+  init: true
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  stop_grace_period: 45s
+
+services:
+  crawler-worker:
+    <<: *remote
+    build:
+      context: ..
+      dockerfile: Dockerfile.backend
+    image: privacheck-render-workers:demo
+    hostname: demo-crawler
+    shm_size: 1gb
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - backend.services.crawler_service.celery_app:crawler_celery_app
+      - worker
+      - --loglevel=INFO
+      - --pool=prefork
+      - --concurrency=1
+      - --queues=crawler.scan
+      - --hostname=crawler@%h
+      - --max-tasks-per-child=20
+
+  compliance-worker:
+    <<: *remote
+    image: privacheck-render-workers:demo
+    hostname: demo-compliance
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - backend.services.compliance_service.celery_app:compliance_celery_app
+      - worker
+      - --loglevel=INFO
+      - --pool=prefork
+      - --concurrency=1
+      - --queues=compliance.evaluate
+      - --hostname=compliance@%h
+      - --max-tasks-per-child=50

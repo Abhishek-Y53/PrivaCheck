@@ -1,11 +1,15 @@
-"""FastAPI application entry point with sanitized validation errors and CORS."""
+"""FastAPI API and optional same-origin Render demo frontend."""
 
-from fastapi import FastAPI, Request
+import os
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from backend.api.routes.auth import router as auth_router
+from backend.api.routes.auth import router as auth_router, google_callback
 from backend.api.routes.admin import router as admin_router
 from backend.api.routes.scans import router as scans_router
 from backend.api.routes.frameworks import router as frameworks_router
@@ -70,12 +74,57 @@ async def sanitized_validation_error(
     return JSONResponse(status_code=422, content={"detail": safe_errors})
 
 
-app.include_router(auth_router)
-app.include_router(admin_router)
-app.include_router(scans_router)
-app.include_router(frameworks_router)
+# Local Compose retains its historical unprefixed endpoints. The hosted demo
+# uses /api/* to avoid collisions with React pages /scans and /admin.
+SERVE_FRONTEND = os.environ.get("PRIVACHECK_SERVE_FRONTEND", "").lower() in {
+    "1", "true", "yes"
+}
+
+if SERVE_FRONTEND:
+    app.include_router(auth_router, prefix="/api")
+    app.include_router(admin_router, prefix="/api")
+    app.include_router(scans_router, prefix="/api")
+    app.include_router(frameworks_router, prefix="/api")
+
+    # Google OAuth configuration intentionally keeps the original callback URL
+    # /auth/google/callback, separately from the /api/auth/google/start route.
+    app.add_api_route(
+        "/auth/google/callback", google_callback, methods=["GET"],
+        include_in_schema=False,
+    )
+
+    frontend_dist = Path(__file__).resolve().parents[2] / "frontend_dist"
+    frontend_index = frontend_dist / "index.html"
+    if not frontend_index.is_file():
+        raise RuntimeError("PRIVACHECK_SERVE_FRONTEND requires built frontend_dist/index.html")
+    app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
 
 
-@app.get("/", tags=["Health"], summary="API health check")
+@app.get("/healthz", tags=["Health"], summary="Health check")
 def health_check() -> dict[str, str]:
     return {"status": "ok", "service": "PrivaCheck API"}
+
+
+if SERVE_FRONTEND:
+    @app.get("/", include_in_schema=False)
+    def frontend_home() -> FileResponse:
+        return FileResponse(frontend_index, headers={"Cache-Control": "no-store"})
+
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def frontend_page(path: str) -> FileResponse:
+        # Never return React HTML in response to misspelled API/auth endpoints,
+        # or requests for a nonexistent static asset.
+        first_segment = path.split("/", 1)[0]
+        if first_segment in {"api", "auth", "assets"} or "." in path.split("/")[-1]:
+            raise HTTPException(status_code=404, detail="Not found")
+        return FileResponse(frontend_index, headers={"Cache-Control": "no-store"})
+else:
+    app.include_router(auth_router)
+    app.include_router(admin_router)
+    app.include_router(scans_router)
+    app.include_router(frameworks_router)
+
+    @app.get("/", include_in_schema=False)
+    def legacy_health_check() -> dict[str, str]:
+        return health_check()

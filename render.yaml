@@ -1,0 +1,44 @@
+# Deploy only the Render Free web service. Create Free Postgres and Free Key
+# Value manually first and configure the secure connection URLs in Dashboard.
+# The worker-only Compose file is for Docker Desktop, not Render.
+services:
+  - type: web
+    name: privacheck-render-demo
+    branch: deploy/render-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: AUTH_COOKIE_SECURE
+        value: 'true'
+      - key: AUTH_COOKIE_SAMESITE
+        value: lax
+      - key: PRIVACHECK_SERVE_FRONTEND
+        value: '1'
+      - key: DB_POOL_SIZE
+        value: '2'
+      - key: DB_MAX_OVERFLOW
+        value: '1'
+      - key: DATABASE_URL
+        sync: false
+      - key: BROKER_URL
+        sync: false
+      - key: AUTH_RATE_LIMIT_REDIS_URL
+        sync: false
+      - key: AUTH_OAUTH_REDIS_URL
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
