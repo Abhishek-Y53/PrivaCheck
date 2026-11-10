@@ -26,3 +26,11 @@ export function GuestOnly({ children }: GuestOnlyProps) {
   if (user) return <Navigate to="/" replace />;
   return children;
 }
+
+export function RequireAdmin() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <div className="auth-loading">Checking administrator permissions…</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'ADMIN') return <Navigate to="/" replace />;
+  return <Outlet />;
+}

@@ -88,3 +88,52 @@
   .print-report-metadata dd{font-size:7.5pt;color:#43536b;margin:0;overflow-wrap:anywhere;word-break:break-word}
   .print-report-footer{border-top:1px solid #dce3ec;padding-top:8px;margin-top:17px;font-size:7pt;color:#65738a;break-inside:avoid}
 }
+
+/* Phase B – administration, intentionally consistent with existing panels. */
+.admin-tabs{display:flex;gap:8px;flex-wrap:wrap}
+.admin-tab{display:inline-flex;align-items:center;gap:7px;padding:10px 13px;border:1px solid #e1e7f0;border-radius:8px;background:#fff;color:#657389;font-size:11px;font-weight:700;cursor:pointer}
+.admin-tab:hover{background:#f7f9ff}
+.admin-tab.active{color:#315de8;background:#edf2ff;border-color:#bfd0ff}
+.admin-panel{overflow:hidden;padding:16px 0 5px}
+.admin-panel-heading{padding:0 18px 15px;display:flex;flex-direction:column;gap:6px}
+.admin-panel-heading h2{font-size:15px;margin:0;font-weight:800;color:#25314a}
+.admin-panel-heading span{font-size:10px;color:#8793a5;line-height:1.5}
+.admin-search{margin:0 18px 17px;max-width:360px}
+.admin-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.admin-cell-strong{font-size:10px;color:#36445d;font-weight:700;overflow-wrap:anywhere}
+.admin-state-active,.admin-state-disabled{font-size:10px;font-weight:700}
+.admin-state-active{color:#16865c}.admin-state-disabled{color:#bf5d46}
+.admin-pager{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:16px 18px}
+.admin-pager span{margin-right:auto;color:#8a96a6;font-size:10px}
+.admin-add-form{display:grid;grid-template-columns:minmax(150px,190px) minmax(190px,1fr) auto;gap:10px;align-items:center;padding:0 18px 17px}
+.admin-add-form .select-input{min-width:0}
+.admin-list-section{margin-top:10px}
+.admin-list-section h3{font-size:12px;color:#34435a;margin:0;padding:12px 18px}
+.admin-empty{font-size:11px;color:#8c97a8;padding:15px 18px;text-align:center}
+.admin-alert-success{background:#eef9f1;color:#246642;border:1px solid #cde8d5;padding:12px 14px;border-radius:7px;font-size:11px}
+.admin-security-note{display:flex;align-items:flex-start;gap:9px;margin:0;color:#8290a5;font-size:10px;line-height:1.6}
+.admin-security-note svg{flex-shrink:0;color:#315de8}
+@media(max-width:760px){.admin-add-form{grid-template-columns:1fr;gap:8px}.admin-tab{font-size:10px;padding:9px}.admin-pager{flex-wrap:wrap}}
+
+/* Admin framework governance — reuse the existing dashboard visual language. */
+.framework-columns {display:grid;grid-template-columns:minmax(220px,0.75fr) minmax(0,2fr);gap:20px;align-items:start}
+.framework-workspace {display:grid;gap:20px;min-width:0}
+.framework-list,.framework-editor-panel {padding:20px}
+.framework-list h2,.framework-editor-panel h2 {display:flex;align-items:center;gap:8px;margin:0 0 14px;font-size:19px}
+.framework-list-item {display:flex;flex-direction:column;text-align:left;gap:4px;width:100%;margin:6px 0;padding:12px;border-radius:9px;border:1px solid var(--border, #dbe3ee);background:transparent;color:inherit;cursor:pointer}
+.framework-list-item.selected {border-color:#4266e4;background:#eef3ff;color:#17367a}
+.framework-list-item small {font-size:12px;opacity:.8}
+.framework-create-form {display:grid;gap:9px;margin-top:22px;padding-top:18px;border-top:1px solid #dfe5ee}
+.framework-create-form h3 {display:flex;gap:7px;align-items:center;font-size:15px;margin:0 0 5px}
+.framework-create-form input,.framework-editor-panel input:not([type=checkbox]),.framework-editor-panel textarea {width:100%;box-sizing:border-box;border:1px solid #d7dfeb;border-radius:8px;padding:10px 12px;font:inherit;background:var(--surface,#fff);color:inherit}
+.framework-editor-panel textarea {resize:vertical}
+.framework-action-row {display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.framework-check {display:flex;gap:10px;align-items:center;margin:12px 0;font-weight:600}
+.framework-version-list {display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}
+.framework-version-selected {outline:2px solid #4266e4}
+.framework-yaml {font-family:Consolas,'Courier New',monospace!important;font-size:13px!important;min-height:320px;line-height:1.55}
+.framework-valid {display:flex;align-items:center;gap:6px;color:#157348}
+@media(max-width:900px){.framework-columns{grid-template-columns:1fr}}
+.framework-preview {margin-top:12px;padding:14px;background:#f7f9fd;border:1px solid #dce4ee;border-radius:9px;font-size:13px}
+.framework-preview ul {padding-left:21px;max-height:260px;overflow:auto}
+.framework-sample {font-family:Consolas,'Courier New',monospace!important;font-size:12px!important}

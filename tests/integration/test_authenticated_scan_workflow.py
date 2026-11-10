@@ -23,7 +23,9 @@ from sqlalchemy.pool import StaticPool
 from backend.api.main import app
 from backend.api.routes import auth as auth_routes
 from backend.api.routes import scans as scan_routes
-from backend.api.services.auth_service import AuthService
+from backend.api.services.google_auth_service import GoogleAuthService
+from backend.infrastructure.database.models.platform_access import PlatformAccessEmail
+from backend.security.google_oidc import GoogleIdentity
 from backend.api.services.async_scan_service import AsyncScanService
 from backend.infrastructure.database.models import User, UserSession
 from backend.infrastructure.database.session import get_db
@@ -79,7 +81,7 @@ def database_factory() -> Generator[sessionmaker[Session], None, None]:
     # tables are created explicitly because production defaults include JSONB.
     User.__table__.metadata.create_all(
         engine,
-        tables=[User.__table__, UserSession.__table__],
+        tables=[User.__table__, UserSession.__table__, PlatformAccessEmail.__table__],
     )
     with engine.begin() as connection:
         connection.exec_driver_sql(
@@ -88,6 +90,7 @@ def database_factory() -> Generator[sessionmaker[Session], None, None]:
                 id CHAR(32) NOT NULL PRIMARY KEY,
                 website VARCHAR(2048) NOT NULL,
                 framework VARCHAR(64) NOT NULL DEFAULT 'gdpr',
+                ruleset_version_id CHAR(32) NULL,
                 user_id CHAR(32) NULL,
                 lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'QUEUED',
                 compliance_status VARCHAR(32) NULL,
@@ -152,7 +155,7 @@ def integration_environment(
     monkeypatch.setattr(
         auth_routes,
         "auth_service",
-        AuthService(session_factory=database_factory),
+        GoogleAuthService(session_factory=database_factory),
     )
     monkeypatch.setattr(auth_routes, "rate_limiter", AllowAllRateLimiter())
     monkeypatch.setattr(
@@ -185,14 +188,20 @@ def _csrf_headers(client: TestClient) -> dict[str, str]:
 
 
 def _register(client: TestClient, email: str) -> dict[str, Any]:
-    response = client.post(
-        "/auth/register",
-        headers=_csrf_headers(client),
-        json={"email": email, "password": PASSWORD},
+    # Offline integration fixture creates a Google-linked session through the
+    # real service; it does not expose any password-registration HTTP route.
+    factory = auth_routes.auth_service.session_factory
+    with factory() as db:
+        db.add(PlatformAccessEmail(email=email))
+        db.commit()
+    result = auth_routes.auth_service.sign_in(
+        GoogleIdentity(sub=f"google-{email}", email=email, hd=None, name=None)
     )
-    assert response.status_code == 201, response.text
-    assert response.cookies.get("privacheck_session")
-    return response.json()
+    client.cookies.set("privacheck_session", result.session_token)
+    return {
+        "csrf_token": client.get("/auth/csrf").json()["csrf_token"],
+        "user": {"id": str(result.user.id), "email": email},
+    }
 
 
 def test_authenticated_scan_flow_enforces_owner_across_all_read_routes(

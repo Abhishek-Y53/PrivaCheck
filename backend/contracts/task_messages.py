@@ -78,6 +78,8 @@ class ComplianceEvaluationRequested(TaskMessage):
     )
     framework_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     observation_count: int = Field(ge=0)
+    # Additive field for old queued messages; every new governed scan sets it.
+    ruleset_version_id: UUID | None = None
 
 
 class ComplianceEvaluationCompleted(TaskMessage):

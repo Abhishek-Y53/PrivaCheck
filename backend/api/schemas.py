@@ -76,6 +76,7 @@ class ScanAcceptedResponse(BaseModel):
     lifecycle_status: Literal["QUEUED"]
     website: str
     framework: str
+    ruleset_version_id: UUID | None = None  # NULL for historical, unversioned scans
     created_at: datetime
     task_id: str
     status_url: str
@@ -88,6 +89,7 @@ class ScanStatusResponse(BaseModel):
     scan_id: UUID
     website: str
     framework: str
+    ruleset_version_id: UUID | None = None  # NULL for historical, unversioned scans
     lifecycle_status: LifecycleStatus
     compliance_status: ComplianceStatus | None = None
     total_checks: int
@@ -116,6 +118,7 @@ class ScanReportResponse(BaseModel):
     scan_id: UUID
     website: str
     framework: str
+    ruleset_version_id: UUID | None = None  # NULL for historical, unversioned scans
     lifecycle_status: Literal["COMPLETED"]
     compliance_status: ComplianceStatus
     total_checks: int

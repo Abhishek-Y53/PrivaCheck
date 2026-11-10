@@ -28,7 +28,11 @@ export function NewScanPage() {
   useEffect(() => {
     let active = true;
     api.listFrameworks()
-      .then((items) => { if (active) setFrameworks(items); })
+      .then((items) => { if (active) {
+        setFrameworks(items);
+        setFramework(current => items.some(item => item.id === current && item.enabled)
+          ? current : (items.find(item => item.enabled)?.id ?? ''));
+      } })
       .catch((err: Error) => { if (active) setError(err.message); })
       .finally(() => { if (active) setLoadingFrameworks(false); });
     return () => { active = false; };

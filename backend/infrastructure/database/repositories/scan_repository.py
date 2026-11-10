@@ -46,6 +46,7 @@ class ScanRepository:
         framework: str = "gdpr",
         scan_id: UUID | str | None = None,
         user_id: UUID | str | None = None,
+        ruleset_version_id: UUID | str | None = None,
     ) -> Scan:
         values: dict[str, Any] = {
             "website": website,
@@ -56,6 +57,8 @@ class ScanRepository:
             values["id"] = _as_uuid(scan_id)
         if user_id is not None:
             values["user_id"] = _as_uuid(user_id)
+        if ruleset_version_id is not None:
+            values["ruleset_version_id"] = _as_uuid(ruleset_version_id)
         scan = Scan(**values)
         session.add(scan)
         session.flush()

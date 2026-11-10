@@ -14,8 +14,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   initializationError: string;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  beginGoogleSignIn: () => void;
+  linkLegacyAccount: (password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -68,14 +68,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const authenticatedUser = await authApi.login(email, password);
-    setUser(authenticatedUser);
-    setInitializationError('');
+  const beginGoogleSignIn = useCallback(() => {
+    authApi.beginGoogleSignIn();
   }, []);
 
-  const register = useCallback(async (email: string, password: string) => {
-    const authenticatedUser = await authApi.register(email, password);
+  const linkLegacyAccount = useCallback(async (password: string) => {
+    const authenticatedUser = await authApi.linkLegacyAccount(password);
     setUser(authenticatedUser);
     setInitializationError('');
   }, []);
@@ -89,10 +87,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     user,
     isLoading,
     initializationError,
-    login,
-    register,
+    beginGoogleSignIn,
+    linkLegacyAccount,
     logout,
-  }), [user, isLoading, initializationError, login, register, logout]);
+  }), [user, isLoading, initializationError, beginGoogleSignIn, linkLegacyAccount, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

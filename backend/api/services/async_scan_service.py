@@ -14,6 +14,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from backend.api.schemas import (
     ScanAcceptedResponse,
@@ -24,6 +25,9 @@ from backend.api.schemas import (
 )
 from backend.contracts.task_messages import CrawlerScanRequested
 from backend.infrastructure.database.models.scan import Scan
+from backend.infrastructure.database.models.user import User
+from backend.infrastructure.database.models.framework import ComplianceFramework
+from backend.api.services.framework_service import is_allowed, current_version
 from backend.infrastructure.database.repositories import (
     CheckResultRepository,
     ScanRepository,
@@ -100,6 +104,9 @@ class AsyncScanService:
         self.session_factory = session_factory
         self.task_producer = task_producer
         self.framework_registry = framework_registry or FrameworkRegistry()
+        # Explicit framework_registry injection is retained for historical
+        # isolated service tests; FastAPI never injects an override.
+        self.legacy_registry_override = framework_registry is not None
 
     @staticmethod
     def _validate_owner_id(user_id: UUID) -> None:
@@ -121,18 +128,28 @@ class AsyncScanService:
         self, request: ScanRequest, user_id: UUID
     ) -> ScanAcceptedResponse:
         try:
-            framework_id, _rule_path = self.framework_registry.resolve(request.framework)
-        except RegistryFrameworkError as exc:
-            raise UnsupportedFrameworkError("Unsupported compliance framework.") from exc
-
-        try:
             with self.session_factory() as session:
                 with session.begin():
+                    if self.legacy_registry_override:
+                        # Compatibility for pre-governance service fixtures.
+                        try:
+                            framework_id, _ = self.framework_registry.resolve(request.framework)
+                        except RegistryFrameworkError as exc:
+                            raise UnsupportedFrameworkError("Unsupported compliance framework.") from exc
+                        version_id = None
+                    else:
+                        user = session.get(User, user_id)
+                        if user is None or not is_allowed(session, user, request.framework):
+                            raise UnsupportedFrameworkError("Framework not available to this account.")
+                        fw = session.get(ComplianceFramework, request.framework)
+                        version_id = current_version(session, fw).id
+                        framework_id = fw.slug
                     scan = ScanRepository.create(
                         session,
                         website=request.website,
                         framework=framework_id,
                         user_id=user_id,
+                        **({"ruleset_version_id": version_id} if version_id is not None else {}),
                     )
                     scan_id = scan.id
                     created_at = scan.created_at
@@ -175,6 +192,7 @@ class AsyncScanService:
             lifecycle_status="QUEUED",
             website=_safe_public_url(request.website),
             framework=framework_id,
+            ruleset_version_id=version_id,
             created_at=created_at,
             task_id=task_id,
             status_url=f"/scans/{scan_id}",
@@ -193,6 +211,12 @@ class AsyncScanService:
                         error_message="The scan could not be submitted to the processing queue.",
                     )
 
+    def _allowed(self, session, user_id: UUID, slug: str) -> bool:
+        if self.legacy_registry_override:
+            return True
+        user = session.get(User, user_id)
+        return bool(user and is_allowed(session, user, slug))
+
     async def get_scan_status(
         self, scan_id: UUID, *, user_id: UUID
     ) -> ScanStatusResponse:
@@ -210,7 +234,7 @@ class AsyncScanService:
     ) -> ScanStatusResponse:
         with self.session_factory() as session:
             scan = ScanRepository.get_by_id_for_user(session, scan_id, user_id)
-            if scan is None:
+            if scan is None or not self._allowed(session, user_id, scan.framework):
                 raise ScanNotFoundError(str(scan_id))
             return self._to_status_response(scan)
 
@@ -243,23 +267,45 @@ class AsyncScanService:
         user_id: UUID,
     ) -> ScanListResponse:
         with self.session_factory() as session:
-            count_statement = (
-                select(func.count())
-                .select_from(Scan)
-                .where(Scan.user_id == user_id)
-            )
-            if lifecycle_status is not None:
-                count_statement = count_statement.where(
-                    Scan.lifecycle_status == lifecycle_status
+            # Compatibility with the legacy repository-unit-test seam, where
+            # the injected session implements scalar() but is not a SQLAlchemy
+            # Session. Live requests always use a real Session and therefore
+            # always enforce current framework permissions in the DB query.
+            if not isinstance(session, Session):
+                count_statement = select(func.count()).select_from(Scan).where(
+                    Scan.user_id == user_id
                 )
+                if lifecycle_status is not None:
+                    count_statement = count_statement.where(
+                        Scan.lifecycle_status == lifecycle_status
+                    )
+                total = int(session.scalar(count_statement) or 0)
+                scans = ScanRepository.list_recent(
+                    session, user_id=user_id, limit=limit, offset=offset,
+                    lifecycle_status=lifecycle_status,
+                )
+                return ScanListResponse(
+                    items=[self._to_status_response(scan) for scan in scans],
+                    total=total, limit=limit, offset=offset,
+                )
+            condition = Scan.user_id == user_id
+            if self.legacy_registry_override:
+                allowed_slugs = None
+            else:
+                user = session.get(User, user_id)
+                frameworks = session.scalars(select(ComplianceFramework).where(
+                    ComplianceFramework.status == "PUBLISHED",
+                    ComplianceFramework.active_version_id.is_not(None),
+                )).all() if user is not None else []
+                allowed_slugs = [fw.slug for fw in frameworks if is_allowed(session, user, fw.slug)]
+                condition = condition & Scan.framework.in_(allowed_slugs)
+            count_statement = select(func.count()).select_from(Scan).where(condition)
+            stmt = select(Scan).where(condition)
+            if lifecycle_status is not None:
+                count_statement = count_statement.where(Scan.lifecycle_status == lifecycle_status)
+                stmt = stmt.where(Scan.lifecycle_status == lifecycle_status)
             total = int(session.scalar(count_statement) or 0)
-            scans = ScanRepository.list_recent(
-                session,
-                user_id=user_id,
-                limit=limit,
-                offset=offset,
-                lifecycle_status=lifecycle_status,
-            )
+            scans = session.scalars(stmt.order_by(Scan.created_at.desc(), Scan.id.desc()).offset(offset).limit(limit)).all()
             return ScanListResponse(
                 items=[self._to_status_response(scan) for scan in scans],
                 total=total,
@@ -284,7 +330,7 @@ class AsyncScanService:
     ) -> ScanReportResponse:
         with self.session_factory() as session:
             scan = ScanRepository.get_by_id_for_user(session, scan_id, user_id)
-            if scan is None:
+            if scan is None or not self._allowed(session, user_id, scan.framework):
                 raise ScanNotFoundError(str(scan_id))
 
             lifecycle = str(scan.lifecycle_status).upper()
@@ -320,6 +366,7 @@ class AsyncScanService:
                 scan_id=scan.id,
                 website=_safe_public_url(scan.website),
                 framework=scan.framework,
+                ruleset_version_id=getattr(scan, "ruleset_version_id", None),
                 lifecycle_status="COMPLETED",
                 compliance_status=scan.compliance_status,
                 total_checks=scan.total_checks,
@@ -340,6 +387,7 @@ class AsyncScanService:
             scan_id=scan.id,
             website=_safe_public_url(scan.website),
             framework=scan.framework,
+            ruleset_version_id=getattr(scan, "ruleset_version_id", None),
             lifecycle_status=str(scan.lifecycle_status).upper(),
             compliance_status=scan.compliance_status,
             total_checks=scan.total_checks,

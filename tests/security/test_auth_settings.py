@@ -8,7 +8,12 @@ def test_production_requires_secure_auth_cookies():
     with pytest.raises(ValidationError):
         Settings(ENVIRONMENT="production", AUTH_COOKIE_SECURE=False)
 
-    settings = Settings(ENVIRONMENT="production", AUTH_COOKIE_SECURE=True)
+    settings = Settings(
+        ENVIRONMENT="production", AUTH_COOKIE_SECURE=True,
+        FRONTEND_ORIGIN="https://privacheck.example",
+        CORS_ORIGINS="https://privacheck.example",
+        GOOGLE_REDIRECT_URI="https://privacheck.example/auth/google/callback",
+    )
     assert settings.auth_cookie_secure is True
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ from backend.infrastructure.database.repositories import (
     ScanRepository,
 )
 from backend.infrastructure.database.session import SessionLocal
+from backend.infrastructure.database.models.framework import RulesetVersion
 from backend.rule_engine.engine import RuleEngine
 from backend.rule_engine.framework_registry import (
     FrameworkRegistry,
@@ -61,7 +63,8 @@ class EvaluationRejected(RuntimeError):
 class EvaluationSnapshot:
     scan_id: UUID
     framework_id: str
-    rule_path: Path
+    rule_path: Path | None
+    rules_yaml: str | None
     crawler_result: CrawlerResult
     observation_count: int
 
@@ -164,7 +167,8 @@ class ComplianceEvaluationService:
             )
 
         try:
-            rules: list[Rule] = self.rule_loader.load(snapshot.rule_path)
+            rules: list[Rule] = (self.rule_loader.load_text(snapshot.rules_yaml)
+                                 if snapshot.rules_yaml is not None else self.rule_loader.load(snapshot.rule_path))
             if not rules:
                 raise ValueError("The registered rule file contains no rules")
         except Exception as exc:
@@ -214,12 +218,26 @@ class ComplianceEvaluationService:
                 if stored_framework != requested_framework:
                     raise EvaluationRejected("UNSUPPORTED_FRAMEWORK")
 
-                try:
-                    framework_id, rule_path = self.framework_registry.resolve(
-                        message.framework_id
-                    )
-                except RegistryFrameworkError as exc:
-                    raise EvaluationRejected("UNSUPPORTED_FRAMEWORK") from exc
+                pinned_id = getattr(scan, "ruleset_version_id", None)
+                if pinned_id != message.ruleset_version_id:
+                    # Message and durable scan record must select the same
+                    # immutable ruleset even if a new version is published.
+                    raise EvaluationRejected("UNSUPPORTED_FRAMEWORK")
+                if pinned_id is not None:
+                    version = session.get(RulesetVersion, pinned_id)
+                    if (version is None or version.status != "PUBLISHED"
+                            or version.framework_slug != stored_framework
+                            or hashlib.sha256(version.yaml_content.encode("utf-8")).hexdigest() != version.sha256):
+                        raise EvaluationRejected("RULE_LOAD_FAILED")
+                    framework_id, rule_path, rules_yaml = stored_framework, None, version.yaml_content
+                else:
+                    # Legacy scan queued before governance migration, with no
+                    # version identity. The original registered GDPR path only.
+                    try:
+                        framework_id, rule_path = self.framework_registry.resolve(message.framework_id)
+                    except RegistryFrameworkError as exc:
+                        raise EvaluationRejected("UNSUPPORTED_FRAMEWORK") from exc
+                    rules_yaml = None
 
                 rows = ObservationRepository.list_for_scan(session, message.scan_id)
                 if (
@@ -239,6 +257,7 @@ class ComplianceEvaluationService:
                     scan_id=scan.id,
                     framework_id=framework_id,
                     rule_path=rule_path,
+                    rules_yaml=rules_yaml,
                     crawler_result=crawler_result,
                     observation_count=len(rows),
                 )

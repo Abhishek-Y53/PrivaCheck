@@ -70,12 +70,14 @@ def _dispatch_compliance_request(
     scan_id: UUID,
     framework_id: str,
     observation_count: int,
+    ruleset_version_id: UUID | None = None,
 ) -> str:
     """Publish a small control message; observations remain in PostgreSQL."""
     request = ComplianceEvaluationRequested(
         scan_id=scan_id,
         framework_id=framework_id,
         observation_count=observation_count,
+        ruleset_version_id=ruleset_version_id,
     )
     async_result = message_producer.send_task(
         COMPLIANCE_EVALUATION_TASK,
@@ -148,6 +150,7 @@ def execute_crawler_scan(
                     raise ValueError("Scan is not in a runnable lifecycle state.")
 
                 framework_id = scan.framework
+                ruleset_version_id = getattr(scan, "ruleset_version_id", None)
                 staged_count = ObservationRepository.count_for_scan(session, scan_id)
 
         reused_staged_observations = staged_count > 0
@@ -195,6 +198,7 @@ def execute_crawler_scan(
             scan_id=scan_id,
             framework_id=framework_id,
             observation_count=staged_count,
+            ruleset_version_id=ruleset_version_id,
         )
 
         return {

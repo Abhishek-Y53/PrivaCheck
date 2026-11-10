@@ -56,6 +56,7 @@ class Scan(Base):
         Index("ix_scans_created_at", "created_at"),
         Index("ix_scans_lifecycle_status", "lifecycle_status"),
         Index("ix_scans_user_id_created_at", "user_id", "created_at"),
+        Index("ix_scans_ruleset_version_id", "ruleset_version_id"),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -70,6 +71,11 @@ class Scan(Base):
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=True,
+    )
+
+    # NULL identifies historical/unversioned scans created before governance.
+    ruleset_version_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("ruleset_versions.id", ondelete="RESTRICT"), nullable=True
     )
 
     lifecycle_status: Mapped[str] = mapped_column(

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from backend.core.config import settings
@@ -15,6 +15,7 @@ from backend.infrastructure.database.models.user import User
 from backend.infrastructure.database.models.user_session import UserSession
 from backend.infrastructure.database.session import get_db
 from backend.api.services.auth_service import hash_session_token
+from backend.api.services.google_auth_service import admitted_user
 
 
 def session_cookie_name() -> str:
@@ -102,4 +103,13 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required.",
         )
+    if not admitted_user(db, user):
+        # Immediately invalidate stale sessions when an admission rule changes.
+        db.execute(
+            update(UserSession)
+            .where(UserSession.token_hash == hash_session_token(token))
+            .values(revoked_at=now)
+        )
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
     return user

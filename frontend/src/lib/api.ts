@@ -10,7 +10,9 @@ import type {
   ScanSummary,
 } from '../types/api';
 import { demoReport, frameworks, initialScans } from '../mock/data';
-import type { AuthResponse, AuthUser, CsrfResponse } from '../types/auth';
+import type { AuthUser, CsrfResponse } from '../types/auth';
+import type { GovernedFramework, FrameworkVersionContent } from '../types/frameworks';
+import type { AdminAuditList, AdminScanList, AdminUser, AdminUserList, AdmissionEntry, AdmissionList } from '../types/admin';
 
 // Mock mode is opt-in. A fresh install uses the real API unless the developer
 // explicitly sets VITE_USE_MOCK_DATA=true.
@@ -170,20 +172,15 @@ export const authApi = {
     }
   },
 
-  async login(email: string, password: string): Promise<AuthUser> {
-    const result = await requestWithCsrf<AuthResponse>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-    return result.user;
+  beginGoogleSignIn(): void {
+    window.location.assign(`${API_BASE_URL}/auth/google/start`);
   },
 
-  async register(email: string, password: string): Promise<AuthUser> {
-    const result = await requestWithCsrf<AuthResponse>('/auth/register', {
+  async linkLegacyAccount(password: string): Promise<AuthUser> {
+    return requestWithCsrf<AuthUser>('/auth/google/link', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ password }),
     });
-    return result.user;
   },
 
   async logout(): Promise<void> {
@@ -204,6 +201,7 @@ function mapScanStatus(scan: ApiScanStatus): ScanSummary {
     scan_id: scan.scan_id,
     website: scan.website,
     framework: scan.framework,
+    ruleset_version_id: scan.ruleset_version_id,
     lifecycle_status: scan.lifecycle_status,
     overall_status: scan.compliance_status ?? undefined,
     created_at: scan.created_at,
@@ -242,6 +240,7 @@ function mapReport(report: ApiScanReport): ScanReport {
     scan_id: report.scan_id,
     website: report.website,
     framework: report.framework,
+    ruleset_version_id: report.ruleset_version_id,
     overall_status: report.compliance_status,
     total_checks: report.total_checks,
     passed_checks: report.passed_checks,
@@ -261,24 +260,12 @@ function mapReport(report: ApiScanReport): ScanReport {
   };
 }
 
-// The M6 backend currently registers GDPR only and does not expose a
-// /frameworks endpoint. Keep this UI catalogue explicit until a framework
-// discovery endpoint is introduced; the API still validates every submitted ID.
-const liveFrameworks: FrameworkOption[] = [
-  {
-    id: 'gdpr',
-    name: 'GDPR',
-    description: 'Technical website checks mapped to the configured GDPR rule set.',
-    enabled: true,
-  },
-];
-
 export const api = {
   isMockMode: USE_MOCK_DATA,
 
   async listFrameworks(): Promise<FrameworkOption[]> {
     if (USE_MOCK_DATA) return frameworks;
-    return liveFrameworks;
+    return request<FrameworkOption[]>('/frameworks');
   },
 
   async listScans(page = 1, pageSize = 10): Promise<PaginatedScans> {
@@ -355,22 +342,107 @@ export const api = {
     };
   },
 
-  async getScan(scanId: string): Promise<ScanSummary> {
+  async getScan(scanId: string, adminView = false): Promise<ScanSummary> {
     if (USE_MOCK_DATA) {
       const scan = readMockScans().find((item) => item.scan_id === scanId);
       if (!scan) throw new Error('Scan not found.');
       return scan;
     }
-    const result = await request<ApiScanStatus>(`/scans/${encodeURIComponent(scanId)}`);
+    const result = adminView
+      ? (await request<{scan: ApiScanStatus}>(`/admin/scans/${encodeURIComponent(scanId)}`)).scan
+      : await request<ApiScanStatus>(`/scans/${encodeURIComponent(scanId)}`);
     return mapScanStatus(result);
   },
 
-  async getReport(scanId: string): Promise<ScanReport> {
+  async getReport(scanId: string, adminView = false): Promise<ScanReport> {
     if (USE_MOCK_DATA) {
       const scan = await this.getScan(scanId);
       return mockReportFor(scan);
     }
-    const result = await request<ApiScanReport>(`/scans/${encodeURIComponent(scanId)}/report`);
+    const prefix = adminView ? "/admin/scans" : "/scans";
+    const result = await request<ApiScanReport>(`${prefix}/${encodeURIComponent(scanId)}/report`);
     return mapReport(result);
+  },
+};
+
+/** Privileged API; the backend independently checks ADMIN on every operation. */
+export const adminApi = {
+  listUsers(q = '', offset = 0, limit = 50): Promise<AdminUserList> {
+    return request(`/admin/users?limit=${limit}&offset=${offset}&q=${encodeURIComponent(q)}`);
+  },
+  changeRole(userId: string, role: 'USER' | 'ADMIN'): Promise<AdminUser> {
+    return requestWithCsrf(`/admin/users/${encodeURIComponent(userId)}/role`, {
+      method: 'POST', body: JSON.stringify({ role }),
+    });
+  },
+  changeStatus(userId: string, is_active: boolean): Promise<AdminUser> {
+    return requestWithCsrf(`/admin/users/${encodeURIComponent(userId)}/status`, {
+      method: 'POST', body: JSON.stringify({ is_active }),
+    });
+  },
+  listAllowlist(): Promise<AdmissionList> {
+    return request('/admin/allowlist');
+  },
+  setAdmission(selectorType: 'domains' | 'emails', value: string, is_active: boolean): Promise<AdmissionEntry> {
+    return requestWithCsrf(`/admin/allowlist/${selectorType}`, {
+      method: 'POST', body: JSON.stringify({ value, is_active }),
+    });
+  },
+  async listScans(offset = 0, limit = 50): Promise<AdminScanList> {
+    const result = await request<{items: {scan: ApiScanStatus; owner_email: string | null}[]; total: number; offset: number; limit: number}>(
+      `/admin/scans?limit=${limit}&offset=${offset}`,
+    );
+    return { ...result, items: result.items.map(({ scan, owner_email }) => ({ scan: mapScanStatus(scan), owner_email })) };
+  },
+  listAudit(offset = 0, limit = 50): Promise<AdminAuditList> {
+    return request(`/admin/audit?limit=${limit}&offset=${offset}`);
+  },
+};
+
+/** All mutation routes revalidate CSRF and the ADMIN session on the backend. */
+export const frameworkAdminApi = {
+  list(): Promise<GovernedFramework[]> {
+    return request('/admin/frameworks');
+  },
+  create(payload: { slug: string; name: string; description: string }): Promise<GovernedFramework> {
+    return requestWithCsrf('/admin/frameworks', { method: 'POST', body: JSON.stringify(payload) });
+  },
+  edit(slug: string, payload: {name: string; description: string}): Promise<GovernedFramework> {
+    return requestWithCsrf(`/admin/frameworks/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify(payload) });
+  },
+  archive(slug: string, archived: boolean): Promise<GovernedFramework> {
+    return requestWithCsrf(`/admin/frameworks/${encodeURIComponent(slug)}/archive`, {
+      method: 'POST', body: JSON.stringify({ archived }),
+    });
+  },
+  access(slug: string, policy: {everyone: boolean; domains: string[]; emails: string[]}): Promise<GovernedFramework> {
+    return requestWithCsrf(`/admin/frameworks/${encodeURIComponent(slug)}/access`, {
+      method: 'PUT', body: JSON.stringify(policy),
+    });
+  },
+  version(slug: string, id: string): Promise<FrameworkVersionContent> {
+    return request(`/admin/frameworks/${encodeURIComponent(slug)}/versions/${encodeURIComponent(id)}`);
+  },
+  validate(yaml_content: string): Promise<{valid: boolean; rule_count: number}> {
+    return requestWithCsrf('/admin/frameworks/validate', {
+      method: 'POST', body: JSON.stringify({yaml_content}),
+    });
+  },
+  preview(yaml_content: string, observations: {category: string; data: Record<string, unknown>}[]): Promise<{
+    sample_only: boolean; rule_count: number; results: {id: string; name: string; status: string}[]; warning: string;
+  }> {
+    return requestWithCsrf('/admin/frameworks/preview', {
+      method: 'POST', body: JSON.stringify({yaml_content, observations}),
+    });
+  },
+  saveDraft(slug: string, yaml_content: string, version_id: string | null): Promise<{id: string; version_no: number; rule_count: number}> {
+    return requestWithCsrf(`/admin/frameworks/${encodeURIComponent(slug)}/draft`, {
+      method: 'POST', body: JSON.stringify({yaml_content, version_id}),
+    });
+  },
+  publish(slug: string, id: string): Promise<GovernedFramework> {
+    return requestWithCsrf(`/admin/frameworks/${encodeURIComponent(slug)}/publish/${encodeURIComponent(id)}`, {
+      method: 'POST',
+    });
   },
 };

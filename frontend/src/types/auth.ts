@@ -1,13 +1,10 @@
 export interface AuthUser {
   id: string;
   email: string;
+  role: 'USER' | 'ADMIN';
+  display_name: string | null;
   is_active: boolean;
   created_at: string;
-}
-
-export interface AuthResponse {
-  user: AuthUser;
-  csrf_token: string;
 }
 
 export interface CsrfResponse {

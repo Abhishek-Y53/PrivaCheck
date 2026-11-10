@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, ChevronUp, Database, Download, FileJson, FileText, Info, Printer } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { StatusBadge } from '../components/StatusBadge';
 import { api } from '../lib/api';
 import { formatDate, formatDuration, getHostname } from '../lib/format';
@@ -93,6 +93,7 @@ function PrintableReport({ report }: { report: ScanReport }) {
         <p className="print-report-url">{report.website}</p>
         <div className="print-report-meta-line">
           <span>Framework: <strong>{report.framework.toUpperCase()}</strong></span>
+          <span>Ruleset: <strong>{report.ruleset_version_id ?? 'Legacy / unversioned'}</strong></span>
           <span>Scan ID: <strong>{report.scan_id}</strong></span>
           <span>Completed: <strong>{formatDate(report.completed_at ?? report.created_at)}</strong></span>
         </div>
@@ -167,6 +168,8 @@ function PrintableReport({ report }: { report: ScanReport }) {
 
 export function ScanDetailPage() {
   const { scanId = '' } = useParams();
+  const adminView = useLocation().pathname.startsWith('/admin/scans/');
+  const historyPath = adminView ? '/admin' : '/scans';
   const [scan, setScan] = useState<ScanSummary | null>(null);
   const [report, setReport] = useState<ScanReport | null>(null);
   const [filter, setFilter] = useState<'ALL' | ComplianceStatus>('ALL');
@@ -179,13 +182,13 @@ export function ScanDetailPage() {
 
     async function refresh() {
       try {
-        const current = await api.getScan(scanId);
+        const current = await api.getScan(scanId, adminView);
         if (!active) return;
         setScan(current);
         setError('');
 
         if (current.lifecycle_status === 'COMPLETED') {
-          const nextReport = await api.getReport(scanId);
+          const nextReport = await api.getReport(scanId, adminView);
           if (active) setReport(nextReport);
           return;
         }
@@ -210,7 +213,7 @@ export function ScanDetailPage() {
       active = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [scanId]);
+  }, [scanId, adminView]);
 
   const filteredResults = useMemo(
     () => (report?.results ?? []).filter((result) => filter === 'ALL' || result.status === filter),
@@ -219,7 +222,7 @@ export function ScanDetailPage() {
 
   if (loading) return <div className="loading-page">Loading scan details…</div>;
   if (error || !scan) {
-    return <div className="page-stack"><Link to="/scans" className="back-link"><ArrowLeft size={15} /> Back to scan history</Link><div className="alert alert-error">{error || 'Scan not found.'}</div></div>;
+    return <div className="page-stack"><Link to={historyPath} className="back-link"><ArrowLeft size={15} /> Back to scan history</Link><div className="alert alert-error">{error || 'Scan not found.'}</div></div>;
   }
 
   const isActive = scan.lifecycle_status === 'QUEUED' || scan.lifecycle_status === 'RUNNING';
@@ -229,7 +232,7 @@ export function ScanDetailPage() {
 
   return (
     <div className="page-stack">
-      <Link to="/scans" className="back-link"><ArrowLeft size={15} /> Back to scan history</Link>
+      <Link to={historyPath} className="back-link"><ArrowLeft size={15} /> Back to scan history</Link>
       <section className="page-heading report-heading"><div><div className="eyebrow">ASSESSMENT REPORT</div><div className="report-title-line"><h1>{getHostname(scan.website)}</h1><StatusBadge status={displayStatus} /></div><p className="page-subtitle">{scan.website}</p></div><div className="report-heading-actions">{report && <><button type="button" className="report-export-button" onClick={() => downloadReportJson(report)}><Download size={14} /><FileJson size={14} /> Download JSON</button><button type="button" className="report-export-button report-export-primary" onClick={() => printReportAsPdf(report)}><Printer size={14} /> Save as PDF</button></>}<span className="framework-chip framework-large">{scan.framework.toUpperCase()}</span></div></section>
 
       {isActive && <div className="panel progress-panel"><div className="progress-spinner" /><div><strong>{scan.lifecycle_status === 'QUEUED' ? 'Scan queued' : 'Assessment in progress'}</strong><p>PrivaCheck is processing this assessment. This page refreshes automatically.</p></div></div>}
@@ -251,7 +254,7 @@ export function ScanDetailPage() {
         <div className="report-footnote"><Info size={14} /> *Confidence is an implementation heuristic, not a statistically calibrated probability. This is a technical assessment, not legal advice.</div>
       </>}
 
-      <section className="panel metadata-panel"><div className="metadata-heading"><FileText size={17} /><strong>Scan metadata</strong></div><div className="metadata-grid"><div><span>Scan ID</span><strong>{scan.scan_id}</strong></div><div><span>Created</span><strong>{formatDate(scan.created_at)}</strong></div><div><span>Duration</span><strong>{formatDuration(scan.duration_seconds)}</strong></div><div><span>Framework</span><strong>{scan.framework.toUpperCase()}</strong></div></div></section>
+      <section className="panel metadata-panel"><div className="metadata-heading"><FileText size={17} /><strong>Scan metadata</strong></div><div className="metadata-grid"><div><span>Scan ID</span><strong>{scan.scan_id}</strong></div><div><span>Created</span><strong>{formatDate(scan.created_at)}</strong></div><div><span>Duration</span><strong>{formatDuration(scan.duration_seconds)}</strong></div><div><span>Framework</span><strong>{scan.framework.toUpperCase()}</strong></div><div><span>Ruleset version</span><strong>{scan.ruleset_version_id ?? 'Legacy / unversioned'}</strong></div></div></section>
       {report && <PrintableReport report={report} />}
     </div>
   );

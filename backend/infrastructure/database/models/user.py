@@ -1,8 +1,4 @@
-"""User account model for authenticated PrivaCheck access.
-
-Passwords are stored only as one-way password hashes. Hashing and password
-verification belong to the authentication service, not this persistence model.
-"""
+"""PrivaCheck user accounts keyed by UUID and Google OIDC subject."""
 
 from __future__ import annotations
 
@@ -35,9 +31,12 @@ class User(Base):
             name="email_canonical",
         ),
         CheckConstraint(
-            "length(password_hash) > 0",
+            "password_hash IS NULL OR length(password_hash) > 0",
             name="password_hash_nonempty",
         ),
+        CheckConstraint("role IN ('USER', 'ADMIN')", name="role_allowed"),
+        CheckConstraint("password_hash IS NOT NULL OR google_sub IS NOT NULL", name="auth_identity_present"),
+        CheckConstraint("google_sub IS NULL OR length(google_sub) > 0", name="google_sub_nonempty"),
         # Enforce case-insensitive uniqueness in PostgreSQL even if a future
         # write path accidentally bypasses application-level normalization.
         Index("uq_users_email_lower", text("lower(email)"), unique=True),
@@ -47,7 +46,12 @@ class User(Base):
         Uuid(as_uuid=True), primary_key=True, default=uuid4
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
+    # Non-null only until a legacy password account is explicitly linked.
+    password_hash: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    google_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
+    google_hd: Mapped[str | None] = mapped_column(String(253), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    role: Mapped[str] = mapped_column(String(8), nullable=False, default="USER", server_default=text("'USER'"))
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )

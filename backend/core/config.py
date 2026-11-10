@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     AUTH_REGISTER_RATE_LIMIT: int = Field(default=3, ge=1, le=100)
     AUTH_REGISTER_RATE_WINDOW_SECONDS: int = Field(default=3600, ge=1, le=86400)
 
+    # Google OIDC server-side Authorization Code + PKCE; the secret stays backend-only.
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
+    FRONTEND_ORIGIN: str = "http://localhost:5173"
+    AUTH_OAUTH_REDIS_URL: str = "redis://localhost:6379/2"
+    AUTH_OAUTH_TRANSACTION_TTL_SECONDS: int = Field(default=300, ge=60, le=600)
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
@@ -57,6 +65,21 @@ class Settings(BaseSettings):
                 raise ValueError("Each CORS origin must be an exact HTTP(S) origin.")
         if self.ENVIRONMENT.strip().lower() in {"production", "prod"} and not self.AUTH_COOKIE_SECURE:
             raise ValueError("AUTH_COOKIE_SECURE must be true in production.")
+        frontend = urlsplit(self.FRONTEND_ORIGIN)
+        if self.FRONTEND_ORIGIN.rstrip("/") not in {origin.rstrip("/") for origin in origins}:
+            raise ValueError("FRONTEND_ORIGIN must be listed in CORS_ORIGINS.")
+        redirect = urlsplit(self.GOOGLE_REDIRECT_URI)
+        if redirect.path != "/auth/google/callback" or redirect.query or redirect.fragment or not redirect.hostname:
+            raise ValueError("GOOGLE_REDIRECT_URI must be the exact /auth/google/callback URL.")
+        if redirect.scheme != "https" and not (redirect.scheme == "http" and redirect.hostname in {"localhost", "127.0.0.1"}):
+            raise ValueError("Google redirect must use HTTPS except on localhost.")
+        if frontend.scheme != "https" and not (frontend.scheme == "http" and frontend.hostname in {"localhost", "127.0.0.1"}):
+            raise ValueError("FRONTEND_ORIGIN must use HTTPS except on localhost.")
+        if bool(self.GOOGLE_CLIENT_ID) != bool(self.GOOGLE_CLIENT_SECRET):
+            raise ValueError("Both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required together.")
+        if self.ENVIRONMENT.strip().lower() in {"production", "prod"}:
+            if frontend.scheme != "https" or redirect.scheme != "https":
+                raise ValueError("Production OIDC endpoints must use HTTPS.")
         if self.AUTH_COOKIE_SAMESITE == "none" and not self.AUTH_COOKIE_SECURE:
             raise ValueError("SameSite=None requires AUTH_COOKIE_SECURE=true.")
         return self

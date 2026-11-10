@@ -15,19 +15,25 @@ from backend.infrastructure.database.repositories.scan_repository import (
 )
 
 
-def test_user_table_stores_only_password_hash_and_has_account_timestamps():
+def test_user_table_stores_google_identity_and_migration_password_hash():
     table = User.__table__
 
     assert set(table.columns.keys()) == {
         "id",
         "email",
         "password_hash",
+        "google_sub",
+        "google_hd",
+        "display_name",
+        "role",
         "is_active",
         "created_at",
         "updated_at",
     }
     assert table.c.email.nullable is False
-    assert table.c.password_hash.nullable is False
+    assert table.c.password_hash.nullable is True
+    assert table.c.google_sub.nullable is True
+    assert table.c.role.nullable is False
     assert table.c.password_hash.type.length == 512
     assert table.c.is_active.nullable is False
     assert table.c.created_at.type.timezone is True

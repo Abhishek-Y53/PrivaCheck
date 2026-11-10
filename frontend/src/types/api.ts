@@ -32,6 +32,7 @@ export interface ScanSummary {
   scan_id: string;
   website: string;
   framework: FrameworkId;
+  ruleset_version_id?: string | null;
   lifecycle_status: ScanLifecycleStatus;
   overall_status?: ComplianceStatus;
   created_at: string;
@@ -74,6 +75,7 @@ export interface ScanReport {
   scan_id: string;
   website: string;
   framework: FrameworkId;
+  ruleset_version_id?: string | null;
   overall_status: ComplianceStatus;
   total_checks: number;
   passed_checks: number;
@@ -108,6 +110,7 @@ export interface CreateScanResponse {
   scan_id: string;
   website: string;
   framework: FrameworkId;
+  ruleset_version_id?: string | null;
   lifecycle_status: 'QUEUED';
   created_at: string;
   task_id: string;
@@ -120,6 +123,7 @@ export interface ApiScanStatus {
   scan_id: string;
   website: string;
   framework: FrameworkId;
+  ruleset_version_id?: string | null;
   lifecycle_status: ScanLifecycleStatus;
   compliance_status: ComplianceStatus | null;
   total_checks: number;
@@ -144,6 +148,7 @@ export interface ApiScanReport {
   scan_id: string;
   website: string;
   framework: FrameworkId;
+  ruleset_version_id?: string | null;
   lifecycle_status: 'COMPLETED';
   compliance_status: ComplianceStatus;
   total_checks: number;

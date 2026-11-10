@@ -8,6 +8,8 @@ import {
   LogOut,
   Plus,
   ShieldCheck,
+  Settings2,
+  Layers3,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 
@@ -45,6 +47,10 @@ export function AppShell() {
           <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><LayoutDashboard size={17} />Overview</NavLink>
           <NavLink to="/scans/new" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><Plus size={17} />New scan</NavLink>
           <NavLink to="/scans" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><ClipboardList size={17} />Scan history</NavLink>
+          {user?.role === 'ADMIN' && <>
+            <NavLink to="/admin" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><Settings2 size={17} />Administration</NavLink>
+            <NavLink to="/admin/frameworks" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><Layers3 size={17} />Frameworks</NavLink>
+          </>}
         </nav>
         <div className="sidebar-bottom">
           <div className="sidebar-status"><span className="online-dot" /><span>{mockMode ? 'Demo workspace' : 'Authenticated workspace'}</span></div>

@@ -54,6 +54,7 @@ services:
       AUTH_LOGIN_RATE_WINDOW_SECONDS: ${AUTH_LOGIN_RATE_WINDOW_SECONDS:-60}
       AUTH_REGISTER_RATE_LIMIT: ${AUTH_REGISTER_RATE_LIMIT:-3}
       AUTH_REGISTER_RATE_WINDOW_SECONDS: ${AUTH_REGISTER_RATE_WINDOW_SECONDS:-3600}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
       CRAWLER_TIMEOUT_SECONDS: ${CRAWLER_TIMEOUT_SECONDS:-180}
       CRAWLER_HEADLESS: "true"
       DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
@@ -70,7 +71,12 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     container_name: privacheck-api
-    environment: *backend_environment
+    environment:
+      <<: *backend_environment
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8000/auth/google/callback}
+      AUTH_OAUTH_REDIS_URL: redis://valkey:6379/2
     command: ["python", "-m", "uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"

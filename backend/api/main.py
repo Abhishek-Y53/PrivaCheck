@@ -6,7 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.api.routes.auth import router as auth_router
+from backend.api.routes.admin import router as admin_router
 from backend.api.routes.scans import router as scans_router
+from backend.api.routes.frameworks import router as frameworks_router
 from backend.core.config import settings
 
 app = FastAPI(
@@ -30,7 +32,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
     allow_headers=["Accept", "Content-Type", "X-CSRF-Token"],
 )
 
@@ -69,7 +71,9 @@ async def sanitized_validation_error(
 
 
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(scans_router)
+app.include_router(frameworks_router)
 
 
 @app.get("/", tags=["Health"], summary="API health check")
